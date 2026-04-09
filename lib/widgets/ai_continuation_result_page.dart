@@ -186,7 +186,7 @@ class _AiContinuationResultPageState extends State<AiContinuationResultPage> {
                           );
                         }
                         return ContinuationResultCards(
-                          results: results.map((r) => r.content).toList(),
+                          results: results,
                           selectedIndex: _selectedIndex,
                           onSelect: (index) {
                             setState(() => _selectedIndex = index);

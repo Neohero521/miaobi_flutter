@@ -55,6 +55,9 @@ class WritingState {
   final int currentResultIndex;
   final String? lastGeneratedContent;
   
+  // 续写前保留的原文（用于显示"原文"区域，避免 content 被续写内容污染后重复显示）
+  final String? originalContent;
+  
   WritingState({
     this.content = '',
     this.isGenerating = false,
@@ -81,6 +84,7 @@ class WritingState {
     this.continuationResults = const [],
     this.currentResultIndex = 0,
     this.lastGeneratedContent,
+    this.originalContent,
   });
   
   bool get canUndo => undoStack.isNotEmpty;
@@ -112,6 +116,7 @@ class WritingState {
     List<ContinuationResultItem>? continuationResults,
     int? currentResultIndex,
     String? lastGeneratedContent,
+    String? originalContent,
   }) {
     return WritingState(
       content: content ?? this.content,
@@ -139,6 +144,7 @@ class WritingState {
       continuationResults: continuationResults ?? this.continuationResults,
       currentResultIndex: currentResultIndex ?? this.currentResultIndex,
       lastGeneratedContent: lastGeneratedContent ?? this.lastGeneratedContent,
+      originalContent: originalContent ?? this.originalContent,
     );
   }
 }
@@ -274,6 +280,14 @@ class WritingProvider extends ChangeNotifier {
     _state = _state.copyWith(suggestions: []);
     notifyListeners();
   }
+
+  void applySuggestion(int index) {
+    if (index < 0 || index >= _state.suggestions.length) return;
+    final suggestion = _state.suggestions[index];
+    final newContent = _state.content + suggestion.content;
+    _state = _state.copyWith(lastGeneratedContent: newContent);
+    setContent(newContent);
+  }
   
   // 角色管理
   void addCharacter(Character character) {
@@ -394,6 +408,7 @@ class WritingProvider extends ChangeNotifier {
       continuationStatus: ContinuationStatus.loading,
       continuationResults: [],
       currentResultIndex: 0,
+      originalContent: _state.content,
     );
     notifyListeners();
   }
@@ -425,7 +440,9 @@ class WritingProvider extends ChangeNotifier {
   void applyContinuationResult(int index) {
     if (index < 0 || index >= _state.continuationResults.length) return;
     final result = _state.continuationResults[index];
-    final newContent = _state.content + result.content;
+    // 使用 originalContent 拼接续写，避免 content 已被追加导致重复
+    final baseContent = _state.originalContent ?? _state.content;
+    final newContent = baseContent + result.content;
     _state = _state.copyWith(lastGeneratedContent: newContent);
     setContent(newContent);
     setContinuationIdle();

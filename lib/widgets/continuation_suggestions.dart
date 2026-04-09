@@ -37,7 +37,7 @@ class ContinuationSuggestions extends StatelessWidget {
                       title: suggestion.direction,
                       content: suggestion.content,
                       onTap: () {
-                        // TODO: 应用这个续写方向
+                        provider.applySuggestion(index);
                       },
                     );
                   },

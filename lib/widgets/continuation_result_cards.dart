@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import '../models/models.dart';
 import 'continuation_result_card.dart';
 
 /// 3个横向结果卡片
 class ContinuationResultCards extends StatefulWidget {
-  final List<String> results;
+  final List<ContinuationResultItem> results;
   final Function(int index)? onInsert;
   final int selectedIndex;
   final Function(int index)? onSelect;
@@ -58,8 +59,8 @@ class _ContinuationResultCardsState extends State<ContinuationResultCards> {
           widget.onSelect?.call(index);
         },
         itemBuilder: (context, index) {
-          return AnimatedBuilder(
-            animation: _pageController,
+          return ListenableBuilder(
+            listenable: _pageController,
             builder: (context, child) {
               double value = 1.0;
               if (_pageController.position.haveDimensions) {
@@ -74,8 +75,8 @@ class _ContinuationResultCardsState extends State<ContinuationResultCards> {
               );
             },
             child: ContinuationResultCard(
-              content: widget.results[index],
-              isNew: index < 3,
+              content: widget.results[index].content,
+              isNew: widget.results[index].isNew,
               isSelected: index == widget.selectedIndex,
               onTap: () => widget.onSelect?.call(index),
             ),

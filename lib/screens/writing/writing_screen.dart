@@ -393,9 +393,9 @@ class _WritingScreenState extends State<WritingScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // 原文（深红）
+                        // 原文（深红）- 使用 originalContent 避免 content 被续写追加后重复显示
                         Text(
-                          provider.state.content,
+                          provider.state.originalContent ?? provider.state.content,
                           style: const TextStyle(
                             fontSize: 15,
                             color: Color(0xFFFF3B3B),
@@ -458,7 +458,9 @@ class _WritingScreenState extends State<WritingScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     _ActionBtn(label: '撤回', color: const Color(0xFFFF3B3B), onTap: () {
-                      provider.undoContinuation();
+                      // 关闭续写结果界面，回到编辑状态
+                      // 注意：不调用 undoContinuation()，因为 undoContinuation() 语义是"撤销上一次已应用的操作"
+                      // 而用户在此界面还没点"使用"，不需要撤销内容
                       setState(() => _showContinuationOptions = false);
                     }),
                     _ActionBtn(label: '修改', color: const Color(0xFFFF3B3B), onTap: () {}),
