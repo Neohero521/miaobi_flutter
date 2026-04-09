@@ -223,11 +223,11 @@ class _WritingScreenState extends State<WritingScreen> {
     return Container(
       height: 56,
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: const Row(
+      child: Row(
         children: [
-          Spacer(),
+          const Spacer(),
           // 标题
-          Text(
+          const Text(
             '妙笔写作',
             style: TextStyle(
               fontSize: 18,
@@ -235,7 +235,17 @@ class _WritingScreenState extends State<WritingScreen> {
               color: AppColors.ink,
             ),
           ),
-          Spacer(),
+          const Spacer(),
+          // 设置按钮
+          IconButton(
+            icon: const Icon(Icons.settings, color: AppColors.ink),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+              );
+            },
+          ),
         ],
       ),
     );
