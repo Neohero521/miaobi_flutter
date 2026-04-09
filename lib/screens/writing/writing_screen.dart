@@ -28,10 +28,10 @@ class _WritingScreenState extends State<WritingScreen> {
   int _currentTabIndex = 0; // 0=创作, 1=一行续写, 2=创造世界
   List<String> _continuationOptions = []; // 续写多选项
   bool _showContinuationOptions = false;
-  
+  bool _isGenerating = false; // 续写进行中
+
   static const String _browserUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
-  @override
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -96,9 +96,8 @@ class _WritingScreenState extends State<WritingScreen> {
       return;
     }
     
-    // 显示加载提示
-    _showSnackBar('正在续写，请稍候...');
-    
+    setState(() => _isGenerating = true);
+
     try {
       // 构建续写长度对应的字数范围
       final lengthMap = {0: '100-200', 1: '300-500', 2: '800-1200'};
@@ -198,9 +197,11 @@ class _WritingScreenState extends State<WritingScreen> {
       // 显示续写结果模式
       setState(() {
         _showContinuationOptions = true;
+        _isGenerating = false;
       });
 
     } catch (e) {
+      setState(() => _isGenerating = false);
       _showSnackBar('续写失败: $e');
     }
   }
@@ -472,11 +473,14 @@ class _WritingScreenState extends State<WritingScreen> {
                     }),
                     _ActionBtn(label: '修改', color: const Color(0xFFFF3B3B), onTap: () {}),
                     _ActionBtn(label: '保存', color: const Color(0xFFFF3B3B), onTap: () {
-                      // 应用选中的续写结果到正文（内容和原文合并，状态变为 idle）
                       if (selectedIndex >= 0 && selectedIndex < results.length) {
                         provider.applyContinuationResult(selectedIndex);
                       }
                       setState(() => _showContinuationOptions = false);
+                      // 立即同步内容到 TextField
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) _contentController.text = provider.state.content;
+                      });
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('已保存~'), backgroundColor: Color(0xFFFF6B9D)),
                       );
@@ -485,12 +489,23 @@ class _WritingScreenState extends State<WritingScreen> {
                 ),
               ),
               Expanded(
-                child: _ActionBtn(
-                  label: 'AI续写',
-                  color: Colors.white,
-                  isAccent: true,
-                  onTap: () => _onGenerate(),
-                ),
+                child: _isGenerating
+                    ? const Center(
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF3B3B)),
+                          ),
+                        ),
+                      )
+                    : _ActionBtn(
+                        label: 'AI续写',
+                        color: Colors.white,
+                        isAccent: true,
+                        onTap: () => _onGenerate(),
+                      ),
               ),
             ],
           ),
