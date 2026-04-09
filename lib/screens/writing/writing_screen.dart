@@ -32,6 +32,13 @@ class _WritingScreenState extends State<WritingScreen> {
   static const String _browserUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
   @override
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 每次返回编辑界面时同步 provider 的内容到 TextField
+    _loadSavedContent();
+  }
+
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -41,7 +48,7 @@ class _WritingScreenState extends State<WritingScreen> {
     });
     _contentController.addListener(_onContentChanged);
   }
-  
+
   void _loadSavedContent() {
     final provider = context.read<WritingProvider>();
     if (provider.state.content.isNotEmpty && _contentController.text != provider.state.content) {
@@ -393,16 +400,16 @@ class _WritingScreenState extends State<WritingScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // 原文（深红）- 使用 originalContent 避免 content 被续写追加后重复显示
+                        // 原文（黑色）
                         Text(
                           provider.state.originalContent ?? provider.state.content,
                           style: const TextStyle(
                             fontSize: 15,
-                            color: Color(0xFFFF3B3B),
+                            color: AppColors.ink,
                             height: 1.8,
                           ),
                         ),
-                        // 如果有选中结果，显示续写内容
+                        // 续写内容（红色），拼在原文后面
                         if (selectedIndex >= 0 && selectedIndex < results.length) ...[
                           Text(
                             results[selectedIndex].content,
@@ -465,6 +472,11 @@ class _WritingScreenState extends State<WritingScreen> {
                     }),
                     _ActionBtn(label: '修改', color: const Color(0xFFFF3B3B), onTap: () {}),
                     _ActionBtn(label: '保存', color: const Color(0xFFFF3B3B), onTap: () {
+                      // 应用选中的续写结果到正文（内容和原文合并，状态变为 idle）
+                      if (selectedIndex >= 0 && selectedIndex < results.length) {
+                        provider.applyContinuationResult(selectedIndex);
+                      }
+                      setState(() => _showContinuationOptions = false);
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('已保存~'), backgroundColor: Color(0xFFFF6B9D)),
                       );
