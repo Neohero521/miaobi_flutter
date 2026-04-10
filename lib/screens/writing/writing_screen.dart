@@ -96,6 +96,8 @@ class _WritingScreenState extends State<WritingScreen> {
       return;
     }
     
+    final provider = context.read<WritingProvider>();
+    provider.setGenerating(true);
     setState(() => _isGenerating = true);
 
     try {
@@ -199,9 +201,11 @@ class _WritingScreenState extends State<WritingScreen> {
         _showContinuationOptions = true;
         _isGenerating = false;
       });
+      provider.setGenerating(false);
 
     } catch (e) {
       setState(() => _isGenerating = false);
+      provider.setGenerating(false);
       _showSnackBar('续写失败: $e');
     }
   }
