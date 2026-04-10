@@ -107,13 +107,24 @@ class _WritingScreenState extends State<WritingScreen> {
 
       // 构建 system prompt
       final systemPrompt = '''你是一个专业的小说续写AI，风格优雅流畅。
-根据用户提供的文本，续写一个合理、有趣的后续内容。
-续写长度：约 $lengthDesc 字。
-要求：
-1. 生成3个不同方向的续写选项
-2. 每个选项用 || 分隔
-3. 每个选项第一个字符要紧跟上文，不能有换行或空格
-4. 3个选项要有明显差异''';
+根据用户提供的文本，续写3个不同方向的后续内容。
+每个续写约 $lengthDesc 字。
+
+【重要格式要求】
+你必须严格按以下格式返回，不要添加任何额外内容：
+
+选项1内容
+||
+选项2内容
+||
+选项3内容
+
+注意：
+- 每个选项之间必须用独立的 || 行分隔
+- 不要使用数字编号
+- 不要加粗或特殊格式
+- 每个选项第一个字符要紧跟上文结尾，不能有换行或空格
+''';
 
       // 构建消息
       final messages = [
@@ -170,16 +181,22 @@ class _WritingScreenState extends State<WritingScreen> {
         throw Exception('生成内容为空，请尝试更换模型');
       }
 
-      // 解析多选项（格式：选项1内容||选项2内容||选项3内容）
+      // 解析多选项（格式：选项1内容 \n||\n 选项2内容 \n||\n 选项3内容）
       final List<String> options = [];
-      if (generatedText.contains('||')) {
-        options.addAll(generatedText.split('||').map((e) => e.trim()).where((e) => e.isNotEmpty));
+      // 先尝试按独立 || 行分割（更可靠）
+      final parts = generatedText.split(RegExp(r'\n\s*\|\|\s*\n')).map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+      if (parts.length >= 2) {
+        options.addAll(parts.take(3));
+      } else if (generatedText.contains('||')) {
+        // 备用：inline || 分隔
+        options.addAll(generatedText.split('||').map((e) => e.trim()).where((e) => e.isNotEmpty).take(3));
       } else {
+        // 备用：按段落分割
         final paras = generatedText.split(RegExp(r'\n\s*\n')).where((e) => e.trim().isNotEmpty).toList();
-        if (paras.length >= 3) {
+        if (paras.length >= 2) {
           options.addAll(paras.take(3));
         } else {
-          options.add(generatedText);
+          options.add(generatedText.trim());
         }
       }
       if (options.isEmpty) options.add(generatedText);
