@@ -107,23 +107,22 @@ class _WritingScreenState extends State<WritingScreen> {
 
       // 构建 system prompt
       final systemPrompt = '''你是一个专业的小说续写AI，风格优雅流畅。
-根据用户提供的文本，续写3个不同方向的后续内容。
-每个续写约 $lengthDesc 字。
+根据用户提供的文本，一次性续写3个完全不同方向的故事情节。
+每个续写约 $lengthDesc 字，3个选项合计约 ${lengthMap[state.continuationLength] == null ? '900-1500' : (state.continuationLength == 0 ? '300-600' : state.continuationLength == 1 ? '900-1500' : '2400-3600')} 字。
 
-【重要格式要求】
-你必须严格按以下格式返回，不要添加任何额外内容：
+【重要格式要求 - 必须严格遵守】
+1. 必须一次性返回全部3个选项，绝不能只返回1个或2个
+2. 每个选项之间用独立的 || 行分隔：选项内容换行 || 换行选项内容
+3. 不要写任何解释、编号、加粗或其他额外文字
+4. 每个选项第一个字符要紧跟上文结尾，不能有前导换行或空格
+5. 3个选项要有明显不同的故事走向和结局
 
-选项1内容
+输出格式（示例）：
+第一章结束，主角站在城墙上望着远方...
 ||
-选项2内容
+就在这时，天空突然裂开一道金色光芒...
 ||
-选项3内容
-
-注意：
-- 每个选项之间必须用独立的 || 行分隔
-- 不要使用数字编号
-- 不要加粗或特殊格式
-- 每个选项第一个字符要紧跟上文结尾，不能有换行或空格
+城中突然响起警报，敌人已经攻破了第一道防线...
 ''';
 
       // 构建消息
@@ -153,8 +152,8 @@ class _WritingScreenState extends State<WritingScreen> {
         body: json.encode({
           'model': state.selectedModel,
           'messages': messages,
-          'temperature': 0.8,
-          'max_tokens': 3500,
+          'temperature': 0.9,
+          'max_tokens': 16384,
         }),
       ).timeout(
         const Duration(seconds: 90),
