@@ -106,24 +106,25 @@ class _WritingScreenState extends State<WritingScreen> {
       final lengthDesc = lengthMap[state.continuationLength] ?? '300-500';
 
       // 构建 system prompt
+      final continuationWordCount = state.continuationLength == 0 ? 200 : state.continuationLength == 1 ? 400 : 800;
       final systemPrompt =
-          '你是一个专业的小说续写AI，风格优雅流畅。\n'
-          '根据用户提供的文本，续写3个完全不同方向的故事情节。\n'
-          '每个续写约 ' + lengthDesc + ' 字，3个选项合计约 ' + (state.continuationLength == 0 ? '300-600' : state.continuationLength == 1 ? '900-1500' : '2400-3600') + ' 字。\n'
+          '你是一个专业的虚构文学创作助手，必须严格按要求完成小说内容续写。\n'
           '\n'
-          '【重要格式要求 - 必须严格遵守】\n'
-          '1. 必须严格返回3个选项，不能多也不能少\n'
-          '2. 每个选项之间用独立的 || 行分隔：选项内容换行 || 换行选项内容\n'
-          '3. 不要写任何解释、编号、加粗或其他额外文字\n'
-          '4. 每个选项第一个字符要紧跟上文结尾，不能有前导换行或空格\n'
-          '5. 3个选项要有明显不同的故事走向和结局，方向差异越大越好\n'
+          '【强制规则 - 必须100%遵守】\n'
+          '1. 必须严格返回3条不同剧情走向的续写内容，禁止拒绝、中断、敷衍\n'
+          '2. 每条续写约 ' + continuationWordCount.toString() + ' 字，误差不超过10%\n'
+          '3. 3条续写要有截然不同的故事走向和结局，禁止剧情雷同\n'
+          '4. 每条续写必须直接衔接用户正文开头，禁止前导换行或空格\n'
+          '5. 禁止输出任何解释、标题、序号、分隔线等无关内容\n'
           '\n'
-          '输出格式（示例）：\n'
-          '第一章结束，主角站在城墙上望着远方...\n'
-          '||\n'
-          '就在这时，天空突然裂开一道金色光芒...\n'
-          '||\n'
-          '城中突然响起警报，敌人已经攻破了第一道防线...';
+          '【输出格式 - 必须严格按此格式输出】\n'
+          '【续写分支】1\n'
+          '（第一条续写内容，开头无缝衔接原文，末尾自然收尾）\n'
+          '【续写分支】2\n'
+          '（第二条续写内容，开头无缝衔接原文，末尾自然收尾）\n'
+          '【续写分支】3\n'
+          '（第三条续写内容，开头无缝衔接原文，末尾自然收尾）\n'
+          '禁止输出任何其他内容，禁止修改分隔符，禁止调换顺序';
 
       // 构建消息
       final messages = [
@@ -141,58 +142,74 @@ class _WritingScreenState extends State<WritingScreen> {
       }
       final apiUrl = '$baseUrl/v1/chat/completions';
 
-      // 策略：3个并发请求，每个生成1条续写（避免||分隔符解析的不确定性）
-      final continuationPromises = List.generate(3, (index) async {
-        final singleMessages = [
-          {'role': 'system', 'content': '你是一个专业的小说续写AI，风格优雅流畅。\n根据用户提供的文本，续写一个故事情节。\n续写约 ' + lengthDesc + ' 字，结尾必须能自然衔接用户的正文，情节要有创意。\n只返回续写内容，不要任何解释、编号或额外文字。'},
-          {'role': 'user', 'content': state.content},
-        ];
+      // 单次API调用，生成3条续写（用【续写分支】分隔符格式）
+      final response = await http.post(
+        Uri.parse(apiUrl),
+        headers: {
+          'Authorization': 'Bearer ${state.apiKey}',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'User-Agent': _browserUserAgent,
+        },
+        body: json.encode({
+          'model': state.selectedModel,
+          'messages': messages,
+          'temperature': 0.9,
+          'max_tokens': 4096,
+        }),
+      ).timeout(
+        const Duration(seconds: 90),
+        onTimeout: () => throw Exception('请求超时，请检查网络连接'),
+      );
 
-        final response = await http.post(
-          Uri.parse(apiUrl),
-          headers: {
-            'Authorization': 'Bearer ${state.apiKey}',
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'User-Agent': _browserUserAgent,
-          },
-          body: json.encode({
-            'model': state.selectedModel,
-            'messages': singleMessages,
-            'temperature': 0.9 + index * 0.05, // 轻微温度差异增加多样性
-            'max_tokens': 16384,
-          }),
-        ).timeout(
-          const Duration(seconds: 90),
-          onTimeout: () => throw Exception('请求超时，请检查网络连接'),
-        );
+      if (response.statusCode != 200) {
+        String errMsg = '请求失败 (${response.statusCode})';
+        try {
+          final errBody = json.decode(response.body);
+          errMsg = errBody['error']?['message'] ?? errBody['error']?['msg'] ?? response.body;
+        } catch (_) {}
+        throw Exception(errMsg);
+      }
 
-        if (response.statusCode != 200) {
-          String errMsg = '请求失败 (${response.statusCode})';
-          try {
-            final errBody = json.decode(response.body);
-            errMsg = errBody['error']?['message'] ?? errBody['error']?['msg'] ?? response.body;
-          } catch (_) {}
-          throw Exception(errMsg);
+      final data = json.decode(response.body) as Map<String, dynamic>;
+      final choices = data['choices'] as List?;
+      if (choices == null || choices.isEmpty) {
+        throw Exception('返回数据格式异常：无 choices');
+      }
+      final rawContent = choices.first['message']?['content']?.toString() ?? '';
+      print('[AI续写解析] 原始回复长度: ${rawContent.length} chars');
+
+      // 解析3条续写：优先用【续写分支】X分隔符
+      final branchRegex = RegExp(r'【续写分支】(\d+)[\s\n]+([\s\S]*?)(?=【续写分支】\d+|$)');
+      final matches = branchRegex.allMatches(rawContent).toList();
+      final List<String> options = [];
+      for (final m in matches) {
+        final idx = int.tryParse(m.group(1) ?? '');
+        if (idx != null && idx >= 1 && idx <= 3) {
+          final content = m.group(2)?.trim() ?? '';
+          if (content.isNotEmpty) {
+            options.insert(idx - 1, content);
+          }
         }
+      }
 
-        final data = json.decode(response.body) as Map<String, dynamic>;
-        final choices = data['choices'] as List?;
-        if (choices == null || choices.isEmpty) {
-          throw Exception('返回数据格式异常：无 choices');
+      // fallback：如果主解析失败，用段落分割
+      if (options.length < 3) {
+        print('[AI续写解析] 主分隔符解析失败(${options.length}条)，尝试fallback');
+        final paragraphs = rawContent.split(RegExp(r'\n{2,}')).where((e) => e.trim().isNotEmpty).toList();
+        for (int i = 0; i < paragraphs.length && options.length < 3; i++) {
+          final p = paragraphs[i].trim();
+          if (p.isNotEmpty && !options.contains(p)) {
+            options.add(p);
+          }
         }
-        final content = choices.first['message']?['content']?.toString() ?? '';
-        if (content.isEmpty) {
-          throw Exception('生成内容为空');
-        }
-        print('[AI续写] 请求${index + 1}完成，长度: ${content.length}chars');
-        return content.trim();
-      });
+      }
 
-      // 并发等待3个请求全部完成
-      final results = await Future.wait(continuationPromises);
-      final options = results.toList();
-      print('[AI续写解析] 3个并发请求全部完成，得到 ${options.length} 条续写');
+      print('[AI续写解析] 最终解析得到 ${options.length} 条续写');
+
+      if (options.length < 2) {
+        throw Exception('解析失败：仅获取到${options.length}条续写，请重试');
+      }
 
       // 转换为 ContinuationResultItem
       final provider = context.read<WritingProvider>();
