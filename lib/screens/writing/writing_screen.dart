@@ -185,26 +185,52 @@ class _WritingScreenState extends State<WritingScreen> {
       }
       print('[AI续写解析] 从 choices 数组直接获取 ${options.length} 条结果');
 
-      // 如果 choices 不足3条，尝试用 || 分隔符解析第一个 choice 作为 fallback
+      // 如果 choices 不足3条，尝试用各种方式从首个回复中提取3个选项
       if (options.length < 3 && choices.isNotEmpty) {
         final firstText = choices.first['message']?['content']?.toString() ?? '';
-        if (firstText.isNotEmpty) {
-          print('[AI续写解析] choices 只有 ${options.length} 条，尝试从首个回复中按 || 分隔提取: ${firstText.length} chars');
-          // 先尝试按独立 || 行分割（最可靠）
-          final parts = firstText.split(RegExp(r'\n\s*\|\|\s*\n')).map((e) => e.trim()).where((e) => e.isNotEmpty).take(3).toList();
-          if (parts.length >= 2) {
-            print('[AI续写解析] 使用独立 || 分割，得到 ${parts.length} 个选项');
-            options.clear();
-            options.addAll(parts);
-          } else {
-            // inline || 分隔
-            final inlineParts = firstText.split('||').map((e) => e.trim()).where((e) => e.isNotEmpty).take(3).toList();
-            if (inlineParts.length >= 2) {
-              print('[AI续写解析] 使用 inline || 分割，得到 ${inlineParts.length} 个选项');
-              options.clear();
-              options.addAll(inlineParts);
-            }
+        print('[AI续写解析] 首个回复长度: ${firstText.length} chars, 内容预览: ${firstText.length > 100 ? '${firstText.substring(0, 100)}...' : firstText}');
+
+        // 策略1：按独立 || 行分割
+        final byNewline = firstText.split(RegExp(r'\n\s*\|\|\s*\n')).map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+        // 策略2：按 inline || 分割
+        final byInline = firstText.split('||').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+        // 策略3：按段落空行分割
+        final byParagraph = firstText.split(RegExp(r'\n\s*\n')).where((e) => e.trim().isNotEmpty).toList();
+
+        List<String> bestSplit = [];
+        String strategy = '';
+
+        if (byNewline.length >= 3) {
+          bestSplit = byNewline.take(3).toList(); strategy = '独立||行';
+        } else if (byInline.length >= 3) {
+          bestSplit = byInline.take(3).toList(); strategy = 'inline||';
+        } else if (byParagraph.length >= 3) {
+          bestSplit = byParagraph.take(3).toList(); strategy = '段落空行';
+        } else if (byNewline.length == 2) {
+          bestSplit = byNewline.toList(); strategy = '独立||行(仅2)';
+        } else if (byInline.length == 2) {
+          bestSplit = byInline.toList(); strategy = 'inline||(仅2)';
+        } else if (byParagraph.length == 2) {
+          bestSplit = byParagraph.toList(); strategy = '段落空行(仅2)';
+        } else {
+          // 最后手段：强制按字符数三等分
+          final totalLen = firstText.length;
+          if (totalLen > 200) {
+            final third = totalLen ~/ 3;
+            bestSplit = [
+              firstText.substring(0, third).trim(),
+              firstText.substring(third, third * 2).trim(),
+              firstText.substring(third * 2).trim(),
+            ];
+            strategy = '强制三等分';
           }
+        }
+
+        print('[AI续写解析] 使用策略: $strategy, 得到 ${bestSplit.length} 个选项: ${bestSplit.map((e) => '${e.length}chars').toList()}');
+
+        if (bestSplit.length >= 2) {
+          options.clear();
+          options.addAll(bestSplit);
         }
       }
 
