@@ -69,24 +69,23 @@ class _BottomInputBarState extends State<BottomInputBar> {
     }
     _removeStyleOverlay();
 
-    final renderBox = context.findRenderObject() as RenderBox;
-    final size = renderBox.size;
-
     _overlayStar = OverlayEntry(
       builder: (ctx) => Stack(
         children: [
-          // 点击其他地方关闭
+          // 点击其他地方关闭（但不拦截面板区域）
           Positioned.fill(
             child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
+              behavior: HitTestBehavior.translucent,
               onTap: _removeStarOverlay,
               child: const SizedBox.expand(),
             ),
           ),
-          // 功能面板
-          Positioned(
-            left: 16,
-            bottom: 72,
+          // 功能面板 - 用 CompositedTransformFollower 跟随星芒按钮
+          CompositedTransformFollower(
+            link: _layerLink,
+            targetAnchor: Alignment.topLeft,
+            followerAnchor: Alignment.bottomLeft,
+            offset: const Offset(0, 8),
             child: _StarFunctionPanel(
               onExpand: () { _removeStarOverlay(); widget.onExpand(); },
               onShrink: () { _removeStarOverlay(); widget.onShrink(); },
@@ -110,17 +109,20 @@ class _BottomInputBarState extends State<BottomInputBar> {
     _overlayStyle = OverlayEntry(
       builder: (ctx) => Stack(
         children: [
+          // 点击其他地方关闭（但不拦截面板区域）
           Positioned.fill(
             child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
+              behavior: HitTestBehavior.translucent,
               onTap: _removeStyleOverlay,
               child: const SizedBox.expand(),
             ),
           ),
-          // 文风面板
-          Positioned(
-            right: 16,
-            bottom: 72,
+          // 文风面板 - 用 CompositedTransformFollower 跟随风格按钮
+          CompositedTransformFollower(
+            link: _styleLayerLink,
+            targetAnchor: Alignment.topRight,
+            followerAnchor: Alignment.bottomRight,
+            offset: const Offset(0, 8),
             child: _StylePanel(
               selectedStyle: widget.selectedStyle,
               onStyleSelected: (style) {
@@ -156,16 +158,22 @@ class _BottomInputBarState extends State<BottomInputBar> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               // 1. 星芒图标按钮
-              _StarButton(onTap: _toggleStarMenu),
+              CompositedTransformTarget(
+                link: _layerLink,
+                child: _StarButton(onTap: _toggleStarMenu),
+              ),
               // 2. 上一步按钮
               _UndoButton(onTap: widget.canUndo ? widget.onUndo : null, enabled: widget.canUndo),
               // 3. 下一步按钮
               _RedoButton(onTap: widget.canRedo ? widget.onRedo : null, enabled: widget.canRedo),
               // 4. 文风选择下拉按钮
-              _StyleSelectButton(
-                selectedStyle: widget.selectedStyle,
-                onTap: _toggleStyleMenu,
-                isOpen: _overlayStyle != null,
+              CompositedTransformTarget(
+                link: _styleLayerLink,
+                child: _StyleSelectButton(
+                  selectedStyle: widget.selectedStyle,
+                  onTap: _toggleStyleMenu,
+                  isOpen: _overlayStyle != null,
+                ),
               ),
               // 5. AI继续按钮
               _AiContinueButton(isGenerating: widget.isGenerating, onTap: widget.onGenerate),

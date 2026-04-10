@@ -107,28 +107,23 @@ class _WritingScreenState extends State<WritingScreen> {
 
       // 构建 system prompt
       final systemPrompt =
-          '你是一个专业的小说续写AI。\n'
-          '用户会提供一段小说正文，你必须续写3个完全不同方向的故事情节。\n'
+          '你是一个专业的小说续写AI，风格优雅流畅。\n'
+          '根据用户提供的文本，续写3个完全不同方向的故事情节。\n'
+          '每个续写约 ' + lengthDesc + ' 字，3个选项合计约 ' + (state.continuationLength == 0 ? '300-600' : state.continuationLength == 1 ? '900-1500' : '2400-3600') + ' 字。\n'
           '\n'
-          '【强制要求】\n'
-          '- 必须严格返回3个选项，不能只返回1个或2个\n'
-          '- 每个选项约 ' + lengthDesc + ' 字\n'
-          '- 每个选项的结尾必须能自然衔接用户的正文\n'
-          '- 3个选项要有截然不同的故事走向和结局\n'
+          '【重要格式要求 - 必须严格遵守】\n'
+          '1. 必须严格返回3个选项，不能多也不能少\n'
+          '2. 每个选项之间用独立的 || 行分隔：选项内容换行 || 换行选项内容\n'
+          '3. 不要写任何解释、编号、加粗或其他额外文字\n'
+          '4. 每个选项第一个字符要紧跟上文结尾，不能有前导换行或空格\n'
+          '5. 3个选项要有明显不同的故事走向和结局，方向差异越大越好\n'
           '\n'
-          '【输出格式 - 必须严格遵守】\n'
-          '在同一条回复中，用以下格式输出全部3个选项：\n'
-          '\n'
-          '---选项1---\n'
-          '（选项1内容）\n'
-          '---选项2---\n'
-          '（选项2内容）\n'
-          '---选项3---\n'
-          '（选项3内容）\n'
-          '\n'
-          '注意：\n'
-          '- 不要写任何解释、序号、加粗或其他文字\n'
-          '- 3个选项必须全部在同一回复中返回';
+          '输出格式（示例）：\n'
+          '第一章结束，主角站在城墙上望着远方...\n'
+          '||\n'
+          '就在这时，天空突然裂开一道金色光芒...\n'
+          '||\n'
+          '城中突然响起警报，敌人已经攻破了第一道防线...';
 
       // 构建消息
       final messages = [
@@ -195,24 +190,24 @@ class _WritingScreenState extends State<WritingScreen> {
         final firstText = choices.first['message']?['content']?.toString() ?? '';
         print('[AI续写解析] 首个回复长度: ${firstText.length} chars, 内容预览: ${firstText.length > 100 ? '${firstText.substring(0, 100)}...' : firstText}');
 
-        // 策略1：按 ---选项X--- 分隔符分割
-        final byOptionTag = firstText.split(RegExp(r'---\s*选项\d+\s*---')).where((e) => e.trim().isNotEmpty).toList();
-        // 策略2：按独立 || 行分割
+        // 策略1：按独立 || 行分割
         final byNewline = firstText.split(RegExp(r'\n\s*\|\|\s*\n')).map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-        // 策略3：按 inline || 分割
+        // 策略2：按 inline || 分割
         final byInline = firstText.split('||').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+        // 策略3：按 ---选项X--- 分隔符分割
+        final byOptionTag = firstText.split(RegExp(r'---\s*选项\d+\s*---')).where((e) => e.trim().isNotEmpty).toList();
         // 策略4：按段落空行分割
         final byParagraph = firstText.split(RegExp(r'\n\s*\n')).where((e) => e.trim().isNotEmpty).toList();
 
         List<String> bestSplit = [];
         String strategy = '';
 
-        if (byOptionTag.length >= 3) {
-          bestSplit = byOptionTag.take(3).toList(); strategy = '---选项X---';
-        } else if (byNewline.length >= 3) {
+        if (byNewline.length >= 3) {
           bestSplit = byNewline.take(3).toList(); strategy = '独立||行';
         } else if (byInline.length >= 3) {
           bestSplit = byInline.take(3).toList(); strategy = 'inline||';
+        } else if (byOptionTag.length >= 3) {
+          bestSplit = byOptionTag.take(3).toList(); strategy = '---选项X---';
         } else if (byParagraph.length >= 3) {
           bestSplit = byParagraph.take(3).toList(); strategy = '段落空行';
         } else if (byNewline.length == 2) {
