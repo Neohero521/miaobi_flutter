@@ -477,14 +477,15 @@ class _WritingScreenState extends State<WritingScreen> {
                     }),
                     _ActionBtn(label: '修改', color: const Color(0xFFFF3B3B), onTap: () {}),
                     _ActionBtn(label: '保存', color: const Color(0xFFFF3B3B), onTap: () {
+                      // 直接从 results 计算新内容，避免依赖 applyContinuationResult 的状态同步
                       if (selectedIndex >= 0 && selectedIndex < results.length) {
-                        provider.applyContinuationResult(selectedIndex);
+                        final result = results[selectedIndex];
+                        final baseContent = provider.state.originalContent ?? provider.state.content;
+                        final newContent = baseContent + result.content;
+                        _contentController.text = newContent;
+                        provider.setContent(newContent);
                       }
                       setState(() => _showContinuationOptions = false);
-                      // 立即同步内容到 TextField
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (mounted) _contentController.text = provider.state.content;
-                      });
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('已保存~'), backgroundColor: Color(0xFFFF6B9D)),
                       );
@@ -520,7 +521,7 @@ class _WritingScreenState extends State<WritingScreen> {
           flex: 30,
           child: Column(
             children: [
-              _buildRecommendationHeader(provider, selectedIndex),
+              _buildRecommendationHeader(provider, results, selectedIndex),
               Expanded(
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
@@ -547,7 +548,7 @@ class _WritingScreenState extends State<WritingScreen> {
     );
   }
   
-  Widget _buildRecommendationHeader(WritingProvider provider, int selectedIndex) {
+  Widget _buildRecommendationHeader(WritingProvider provider, List<ContinuationResultItem> results, int selectedIndex) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
@@ -584,7 +585,11 @@ class _WritingScreenState extends State<WritingScreen> {
           const SizedBox(width: 16),
           ElevatedButton(
             onPressed: selectedIndex >= 0 ? () {
-              provider.applyContinuationResult(selectedIndex);
+              final result = results[selectedIndex];
+              final baseContent = provider.state.originalContent ?? provider.state.content;
+              final newContent = baseContent + result.content;
+              _contentController.text = newContent;
+              provider.setContent(newContent);
               setState(() => _showContinuationOptions = false);
             } : null,
             style: ElevatedButton.styleFrom(
