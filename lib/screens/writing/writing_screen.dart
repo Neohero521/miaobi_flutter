@@ -107,15 +107,15 @@ class _WritingScreenState extends State<WritingScreen> {
 
       // 构建 system prompt
       final systemPrompt = '''你是一个专业的小说续写AI，风格优雅流畅。
-根据用户提供的文本，一次性续写3个完全不同方向的故事情节。
+根据用户提供的文本，续写3个完全不同方向的故事情节。
 每个续写约 $lengthDesc 字，3个选项合计约 ${lengthMap[state.continuationLength] == null ? '900-1500' : (state.continuationLength == 0 ? '300-600' : state.continuationLength == 1 ? '900-1500' : '2400-3600')} 字。
 
 【重要格式要求 - 必须严格遵守】
-1. 必须一次性返回全部3个选项，绝不能只返回1个或2个
+1. 必须严格返回3个选项，不能多也不能少
 2. 每个选项之间用独立的 || 行分隔：选项内容换行 || 换行选项内容
 3. 不要写任何解释、编号、加粗或其他额外文字
 4. 每个选项第一个字符要紧跟上文结尾，不能有前导换行或空格
-5. 3个选项要有明显不同的故事走向和结局
+5. 3个选项要有明显不同的故事走向和结局，方向差异越大越好
 
 输出格式（示例）：
 第一章结束，主角站在城墙上望着远方...
@@ -154,6 +154,7 @@ class _WritingScreenState extends State<WritingScreen> {
           'messages': messages,
           'temperature': 0.9,
           'max_tokens': 16384,
+          'n': 3,
         }),
       ).timeout(
         const Duration(seconds: 90),
@@ -174,70 +175,43 @@ class _WritingScreenState extends State<WritingScreen> {
       if (choices == null || choices.isEmpty) {
         throw Exception('返回数据格式异常：无 choices');
       }
-
-      final generatedText = choices.first['message']?['content']?.toString() ?? '';
-      if (generatedText.isEmpty) {
-        throw Exception('生成内容为空，请尝试更换模型');
-      }
-
-      // 解析多选项（格式：选项1内容 \n||\n 选项2内容 \n||\n 选项3内容）
+      // 优先策略：从 choices 数组直接取全部 n 条结果（n=3 已设置）
       final List<String> options = [];
-      // 先尝试按独立 || 行分割（更可靠）
-      final parts = generatedText.split(RegExp(r'\n\s*\|\|\s*\n')).map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-      print('[AI续写解析] 原始返回 (${generatedText.length} chars): ${generatedText.substring(0, generatedText.length.clamp(0, 200))}...');
-      print('[AI续写解析] 按 \\n||\\n 分割得到 ${parts.length} 段: $parts');
-      if (parts.length >= 2) {
-        options.addAll(parts.take(3));
-        print('[AI续写解析] 使用独立 || 分割，得到 ${options.length} 个选项');
-      } else if (generatedText.contains('||')) {
-        // 备用：inline || 分隔
-        final inlineParts = generatedText.split('||').map((e) => e.trim()).where((e) => e.isNotEmpty).take(3).toList();
-        print('[AI续写解析] 按 inline || 分割得到 ${inlineParts.length} 段: $inlineParts');
-        options.addAll(inlineParts);
-        print('[AI续写解析] 使用 inline || 分割，得到 ${options.length} 个选项');
-      } else {
-        // 备用：按段落分割（双换行）
-        final paras = generatedText.split(RegExp(r'\n\s*\n')).where((e) => e.trim().isNotEmpty).toList();
-        print('[AI续写解析] 按段落(双换行)分割得到 ${paras.length} 段: $paras');
-        if (paras.length >= 2) {
-          options.addAll(paras.take(3));
-          print('[AI续写解析] 使用段落分割，得到 ${options.length} 个选项');
-        } else {
-          // 备用：按单换行分割（AI 可能用单换行分隔多个选项）
-          final singleLineParts = generatedText.split(RegExp(r'\n')).where((e) => e.trim().isNotEmpty).toList();
-          print('[AI续写解析] 按单换行分割得到 ${singleLineParts.length} 段: $singleLineParts');
-          if (singleLineParts.length >= 2) {
-            options.addAll(singleLineParts.take(3));
-            print('[AI续写解析] 使用单换行分割，得到 ${options.length} 个选项');
+      for (final choice in choices) {
+        final content = choice['message']?['content']?.toString() ?? '';
+        if (content.isNotEmpty) {
+          options.add(content.trim());
+        }
+      }
+      print('[AI续写解析] 从 choices 数组直接获取 ${options.length} 条结果');
+
+      // 如果 choices 不足3条，尝试用 || 分隔符解析第一个 choice 作为 fallback
+      if (options.length < 3 && choices.isNotEmpty) {
+        final firstText = choices.first['message']?['content']?.toString() ?? '';
+        if (firstText.isNotEmpty) {
+          print('[AI续写解析] choices 只有 ${options.length} 条，尝试从首个回复中按 || 分隔提取: ${firstText.length} chars');
+          // 先尝试按独立 || 行分割（最可靠）
+          final parts = firstText.split(RegExp(r'\n\s*\|\|\s*\n')).map((e) => e.trim()).where((e) => e.isNotEmpty).take(3).toList();
+          if (parts.length >= 2) {
+            print('[AI续写解析] 使用独立 || 分割，得到 ${parts.length} 个选项');
+            options.clear();
+            options.addAll(parts);
           } else {
-            // 备用：检查是否包含数字序号前缀（如 "1. " "2. "）
-            final numberedParts = generatedText.split(RegExp(r'(?:^|\n)\s*[（(]?[123][.、)）]?\s*'));
-            final filteredNumbered = numberedParts.map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-            print('[AI续写解析] 按数字序号分割得到 ${filteredNumbered.length} 段');
-            if (filteredNumbered.length >= 2) {
-              options.addAll(filteredNumbered.take(3));
-              print('[AI续写解析] 使用数字序号分割，得到 ${options.length} 个选项');
-            } else {
-              // 最终备用：将文本按 roughly 1/3 长度平均切分
-              final totalLen = generatedText.trim().length;
-              if (totalLen > 300) {
-                final chunkSize = totalLen ~/ 3;
-                final chunk1 = generatedText.trim().substring(0, chunkSize);
-                final chunk2End = chunkSize + (totalLen - chunkSize) ~/ 2;
-                final chunk2 = generatedText.trim().substring(chunkSize, chunk2End);
-                final chunk3 = generatedText.trim().substring(chunk2End);
-                options.addAll([chunk1, chunk2, chunk3].map((e) => e.trim()).where((e) => e.isNotEmpty));
-                print('[AI续写解析] 无法识别分隔符，按长度平均切分得到 ${options.length} 个选项');
-              }
-              if (options.isEmpty) {
-                options.add(generatedText.trim());
-                print('[AI续写解析] 所有分割方式均失败，使用完整文本作为唯一选项');
-              }
+            // inline || 分隔
+            final inlineParts = firstText.split('||').map((e) => e.trim()).where((e) => e.isNotEmpty).take(3).toList();
+            if (inlineParts.length >= 2) {
+              print('[AI续写解析] 使用 inline || 分割，得到 ${inlineParts.length} 个选项');
+              options.clear();
+              options.addAll(inlineParts);
             }
           }
         }
       }
-      if (options.isEmpty) options.add(generatedText);
+
+      if (options.isEmpty) {
+        throw Exception('生成内容为空，请尝试更换模型');
+      }
+
       final displayOptions = options.take(3).toList();
       print('[AI续写解析] 最终 displayOptions 共 ${displayOptions.length} 条');
 
