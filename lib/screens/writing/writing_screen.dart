@@ -154,10 +154,10 @@ class _WritingScreenState extends State<WritingScreen> {
           'model': state.selectedModel,
           'messages': messages,
           'temperature': 0.8,
-          'max_tokens': 1024,
+          'max_tokens': 3500,
         }),
       ).timeout(
-        const Duration(seconds: 60),
+        const Duration(seconds: 90),
         onTimeout: () => throw Exception('请求超时，请检查网络连接'),
       );
 
@@ -185,22 +185,62 @@ class _WritingScreenState extends State<WritingScreen> {
       final List<String> options = [];
       // 先尝试按独立 || 行分割（更可靠）
       final parts = generatedText.split(RegExp(r'\n\s*\|\|\s*\n')).map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+      print('[AI续写解析] 原始返回 (${generatedText.length} chars): ${generatedText.substring(0, generatedText.length.clamp(0, 200))}...');
+      print('[AI续写解析] 按 \\n||\\n 分割得到 ${parts.length} 段: $parts');
       if (parts.length >= 2) {
         options.addAll(parts.take(3));
+        print('[AI续写解析] 使用独立 || 分割，得到 ${options.length} 个选项');
       } else if (generatedText.contains('||')) {
         // 备用：inline || 分隔
-        options.addAll(generatedText.split('||').map((e) => e.trim()).where((e) => e.isNotEmpty).take(3));
+        final inlineParts = generatedText.split('||').map((e) => e.trim()).where((e) => e.isNotEmpty).take(3).toList();
+        print('[AI续写解析] 按 inline || 分割得到 ${inlineParts.length} 段: $inlineParts');
+        options.addAll(inlineParts);
+        print('[AI续写解析] 使用 inline || 分割，得到 ${options.length} 个选项');
       } else {
-        // 备用：按段落分割
+        // 备用：按段落分割（双换行）
         final paras = generatedText.split(RegExp(r'\n\s*\n')).where((e) => e.trim().isNotEmpty).toList();
+        print('[AI续写解析] 按段落(双换行)分割得到 ${paras.length} 段: $paras');
         if (paras.length >= 2) {
           options.addAll(paras.take(3));
+          print('[AI续写解析] 使用段落分割，得到 ${options.length} 个选项');
         } else {
-          options.add(generatedText.trim());
+          // 备用：按单换行分割（AI 可能用单换行分隔多个选项）
+          final singleLineParts = generatedText.split(RegExp(r'\n')).where((e) => e.trim().isNotEmpty).toList();
+          print('[AI续写解析] 按单换行分割得到 ${singleLineParts.length} 段: $singleLineParts');
+          if (singleLineParts.length >= 2) {
+            options.addAll(singleLineParts.take(3));
+            print('[AI续写解析] 使用单换行分割，得到 ${options.length} 个选项');
+          } else {
+            // 备用：检查是否包含数字序号前缀（如 "1. " "2. "）
+            final numberedParts = generatedText.split(RegExp(r'(?:^|\n)\s*[（(]?[123][.、)）]?\s*'));
+            final filteredNumbered = numberedParts.map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+            print('[AI续写解析] 按数字序号分割得到 ${filteredNumbered.length} 段');
+            if (filteredNumbered.length >= 2) {
+              options.addAll(filteredNumbered.take(3));
+              print('[AI续写解析] 使用数字序号分割，得到 ${options.length} 个选项');
+            } else {
+              // 最终备用：将文本按 roughly 1/3 长度平均切分
+              final totalLen = generatedText.trim().length;
+              if (totalLen > 300) {
+                final chunkSize = totalLen ~/ 3;
+                final chunk1 = generatedText.trim().substring(0, chunkSize);
+                final chunk2End = chunkSize + (totalLen - chunkSize) ~/ 2;
+                final chunk2 = generatedText.trim().substring(chunkSize, chunk2End);
+                final chunk3 = generatedText.trim().substring(chunk2End);
+                options.addAll([chunk1, chunk2, chunk3].map((e) => e.trim()).where((e) => e.isNotEmpty));
+                print('[AI续写解析] 无法识别分隔符，按长度平均切分得到 ${options.length} 个选项');
+              }
+              if (options.isEmpty) {
+                options.add(generatedText.trim());
+                print('[AI续写解析] 所有分割方式均失败，使用完整文本作为唯一选项');
+              }
+            }
+          }
         }
       }
       if (options.isEmpty) options.add(generatedText);
       final displayOptions = options.take(3).toList();
+      print('[AI续写解析] 最终 displayOptions 共 ${displayOptions.length} 条');
 
       // 转换为 ContinuationResultItem
       final provider = context.read<WritingProvider>();
