@@ -141,115 +141,62 @@ class _WritingScreenState extends State<WritingScreen> {
       }
       final apiUrl = '$baseUrl/v1/chat/completions';
 
-      final response = await http.post(
-        Uri.parse(apiUrl),
-        headers: {
-          'Authorization': 'Bearer ${state.apiKey}',
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'User-Agent': _browserUserAgent,
-        },
-        body: json.encode({
-          'model': state.selectedModel,
-          'messages': messages,
-          'temperature': 0.9,
-          'max_tokens': 16384,
-          'n': 3,
-        }),
-      ).timeout(
-        const Duration(seconds: 90),
-        onTimeout: () => throw Exception('请求超时，请检查网络连接'),
-      );
+      // 策略：3个并发请求，每个生成1条续写（避免||分隔符解析的不确定性）
+      final continuationPromises = List.generate(3, (index) async {
+        final singleMessages = [
+          {'role': 'system', 'content': '你是一个专业的小说续写AI，风格优雅流畅。\n根据用户提供的文本，续写一个故事情节。\n续写约 ' + lengthDesc + ' 字，结尾必须能自然衔接用户的正文，情节要有创意。\n只返回续写内容，不要任何解释、编号或额外文字。'},
+          {'role': 'user', 'content': state.content},
+        ];
 
-      if (response.statusCode != 200) {
-        String errMsg = '请求失败 (${response.statusCode})';
-        try {
-          final errBody = json.decode(response.body);
-          errMsg = errBody['error']?['message'] ?? errBody['error']?['msg'] ?? response.body;
-        } catch (_) {}
-        throw Exception(errMsg);
-      }
+        final response = await http.post(
+          Uri.parse(apiUrl),
+          headers: {
+            'Authorization': 'Bearer ${state.apiKey}',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'User-Agent': _browserUserAgent,
+          },
+          body: json.encode({
+            'model': state.selectedModel,
+            'messages': singleMessages,
+            'temperature': 0.9 + index * 0.05, // 轻微温度差异增加多样性
+            'max_tokens': 16384,
+          }),
+        ).timeout(
+          const Duration(seconds: 90),
+          onTimeout: () => throw Exception('请求超时，请检查网络连接'),
+        );
 
-      final data = json.decode(response.body) as Map<String, dynamic>;
-      final choices = data['choices'] as List?;
-      if (choices == null || choices.isEmpty) {
-        throw Exception('返回数据格式异常：无 choices');
-      }
-      // 优先策略：从 choices 数组直接取全部 n 条结果（n=3 已设置）
-      final List<String> options = [];
-      for (final choice in choices) {
-        final content = choice['message']?['content']?.toString() ?? '';
-        if (content.isNotEmpty) {
-          options.add(content.trim());
-        }
-      }
-      print('[AI续写解析] 从 choices 数组直接获取 ${options.length} 条结果');
-
-      // 如果 choices 不足3条，尝试用各种方式从首个回复中提取3个选项
-      if (options.length < 3 && choices.isNotEmpty) {
-        final firstText = choices.first['message']?['content']?.toString() ?? '';
-        print('[AI续写解析] 首个回复长度: ${firstText.length} chars, 内容预览: ${firstText.length > 100 ? '${firstText.substring(0, 100)}...' : firstText}');
-
-        // 策略1：按独立 || 行分割
-        final byNewline = firstText.split(RegExp(r'\n\s*\|\|\s*\n')).map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-        // 策略2：按 inline || 分割
-        final byInline = firstText.split('||').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-        // 策略3：按 ---选项X--- 分隔符分割
-        final byOptionTag = firstText.split(RegExp(r'---\s*选项\d+\s*---')).where((e) => e.trim().isNotEmpty).toList();
-        // 策略4：按段落空行分割
-        final byParagraph = firstText.split(RegExp(r'\n\s*\n')).where((e) => e.trim().isNotEmpty).toList();
-
-        List<String> bestSplit = [];
-        String strategy = '';
-
-        if (byNewline.length >= 3) {
-          bestSplit = byNewline.take(3).toList(); strategy = '独立||行';
-        } else if (byInline.length >= 3) {
-          bestSplit = byInline.take(3).toList(); strategy = 'inline||';
-        } else if (byOptionTag.length >= 3) {
-          bestSplit = byOptionTag.take(3).toList(); strategy = '---选项X---';
-        } else if (byParagraph.length >= 3) {
-          bestSplit = byParagraph.take(3).toList(); strategy = '段落空行';
-        } else if (byNewline.length == 2) {
-          bestSplit = byNewline.toList(); strategy = '独立||行(仅2)';
-        } else if (byInline.length == 2) {
-          bestSplit = byInline.toList(); strategy = 'inline||(仅2)';
-        } else if (byParagraph.length == 2) {
-          bestSplit = byParagraph.toList(); strategy = '段落空行(仅2)';
-        } else if (byOptionTag.length == 2) {
-          bestSplit = byOptionTag.toList(); strategy = '---选项X---(仅2)';
-        } else {
-          // 最后手段：强制按字符数三等分
-          final totalLen = firstText.length;
-          if (totalLen > 200) {
-            final third = totalLen ~/ 3;
-            bestSplit = [
-              firstText.substring(0, third).trim(),
-              firstText.substring(third, third * 2).trim(),
-              firstText.substring(third * 2).trim(),
-            ];
-            strategy = '强制三等分';
-          }
+        if (response.statusCode != 200) {
+          String errMsg = '请求失败 (${response.statusCode})';
+          try {
+            final errBody = json.decode(response.body);
+            errMsg = errBody['error']?['message'] ?? errBody['error']?['msg'] ?? response.body;
+          } catch (_) {}
+          throw Exception(errMsg);
         }
 
-        print('[AI续写解析] 使用策略: $strategy, 得到 ${bestSplit.length} 个选项: ${bestSplit.map((e) => '${e.length}chars').toList()}');
-
-        if (bestSplit.length >= 2) {
-          options.clear();
-          options.addAll(bestSplit);
+        final data = json.decode(response.body) as Map<String, dynamic>;
+        final choices = data['choices'] as List?;
+        if (choices == null || choices.isEmpty) {
+          throw Exception('返回数据格式异常：无 choices');
         }
-      }
+        final content = choices.first['message']?['content']?.toString() ?? '';
+        if (content.isEmpty) {
+          throw Exception('生成内容为空');
+        }
+        print('[AI续写] 请求${index + 1}完成，长度: ${content.length}chars');
+        return content.trim();
+      });
 
-      if (options.isEmpty) {
-        throw Exception('生成内容为空，请尝试更换模型');
-      }
-
-      final displayOptions = options.take(3).toList();
-      print('[AI续写解析] 最终 displayOptions 共 ${displayOptions.length} 条');
+      // 并发等待3个请求全部完成
+      final results = await Future.wait(continuationPromises);
+      final options = results.toList();
+      print('[AI续写解析] 3个并发请求全部完成，得到 ${options.length} 条续写');
 
       // 转换为 ContinuationResultItem
       final provider = context.read<WritingProvider>();
-      final resultItems = displayOptions.asMap().entries.map((e) => ContinuationResultItem(
+      final resultItems = options.asMap().entries.map((e) => ContinuationResultItem(
         content: e.value,
         isNew: e.key < 3,
       )).toList();
