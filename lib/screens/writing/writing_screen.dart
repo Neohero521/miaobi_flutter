@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
@@ -19,235 +18,6 @@ import '../../widgets/text_selection_toolbar.dart';
 import '../../widgets/auto_continuation_bubble.dart';
 import '../settings/settings_screen.dart';
 
-/// 自定义选择控制器：隐藏黑黄条纹手柄
-class InvisibleTextSelectionControls extends TextSelectionControls {
-  @override
-  Widget buildHandle(BuildContext context, TextSelectionHandleType type, double textLineHeight, [VoidCallback? onTap]) {
-    // 返回透明空 widget，隐藏所有选择手柄
-    return const SizedBox.shrink();
-  }
-
-  @override
-  Widget buildToolbar(
-    BuildContext context,
-    Rect globalEditableRegion,
-    double textLineHeight,
-    Offset selectionMidpoint,
-    List<TextSelectionPoint> endpoints,
-    TextSelectionDelegate delegate,
-    ValueListenable<ClipboardStatus>? clipboardStatus,
-    Offset? lastSecondaryTapDownPosition,
-  ) {
-    // 返回空，禁用原生工具栏（我们用 OverlayEntry 替代）
-    return const SizedBox.shrink();
-  }
-
-  @override
-  Offset getHandleAnchor(TextSelectionHandleType type, double textLineHeight) {
-    return Offset.zero;
-  }
-
-  @override
-  Size getHandleSize(double textLineHeight) {
-    return Size.zero;
-  }
-}
-
-final InvisibleTextSelectionControls _invisibleSelectionControls = InvisibleTextSelectionControls();
-
-/// 浮动工具栏 Overlay Widget，在选区正上方显示
-class _SelectionToolbarOverlay extends StatefulWidget {
-  final String selectedText;
-  final int selectionStart;
-  final int selectionEnd;
-  final TextEditingController controller;
-  final VoidCallback onExpand;
-  final VoidCallback onShrink;
-  final VoidCallback onRewrite;
-  final VoidCallback onDirectedContinuation;
-  final VoidCallback onDismiss;
-
-  const _SelectionToolbarOverlay({
-    required this.selectedText,
-    required this.selectionStart,
-    required this.selectionEnd,
-    required this.controller,
-    required this.onExpand,
-    required this.onShrink,
-    required this.onRewrite,
-    required this.onDirectedContinuation,
-    required this.onDismiss,
-  });
-
-  @override
-  State<_SelectionToolbarOverlay> createState() => _SelectionToolbarOverlayState();
-}
-
-class _SelectionToolbarOverlayState extends State<_SelectionToolbarOverlay> {
-  void _copy() {
-    Clipboard.setData(ClipboardData(text: widget.selectedText));
-    widget.onDismiss();
-  }
-
-  void _cut() {
-    Clipboard.setData(ClipboardData(text: widget.selectedText));
-    final text = widget.controller.text;
-    final selection = widget.controller.selection;
-    if (selection.isValid && !selection.isCollapsed) {
-      final newText = text.replaceRange(selection.start, selection.end, '');
-      widget.controller.text = newText;
-      widget.controller.selection = TextSelection.collapsed(offset: selection.start);
-    }
-    widget.onDismiss();
-  }
-
-  void _paste() async {
-    final data = await Clipboard.getData(Clipboard.kTextPlain);
-    if (data?.text != null) {
-      final text = widget.controller.text;
-      final selection = widget.controller.selection;
-      if (selection.isValid) {
-        final newText = text.replaceRange(selection.start, selection.end, data!.text!);
-        widget.controller.text = newText;
-        widget.controller.selection = TextSelection.collapsed(offset: selection.start + data!.text!.length);
-      }
-    }
-    widget.onDismiss();
-  }
-
-  void _selectAll() {
-    widget.controller.selection = TextSelection(baseOffset: 0, extentOffset: widget.controller.text.length);
-    widget.onDismiss();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final screenSize = MediaQuery.of(context).size;
-    final hasSelection = widget.selectedText.isNotEmpty;
-    const toolbarHeight = 80.0;
-    final bottomPadding = MediaQuery.of(context).padding.bottom;
-    // 固定在底部工具栏上方居中
-    final top = screenSize.height - bottomPadding - 80 - toolbarHeight - 60;
-
-    return Positioned(
-      top: top > 100 ? top : 100,
-      left: 16,
-      right: 16,
-      child: Center(
-        child: Material(
-          elevation: 8,
-          borderRadius: BorderRadius.circular(12),
-          color: Colors.white,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _OverlayToolButton(
-                  icon: Icons.content_cut,
-                  label: '剪切',
-                  emoji: '✂️',
-                  onTap: hasSelection ? _cut : null,
-                ),
-                _OverlayToolButton(
-                  icon: Icons.content_copy,
-                  label: '复制',
-                  emoji: '📋',
-                  onTap: hasSelection ? _copy : null,
-                ),
-                _OverlayToolButton(
-                  icon: Icons.content_paste,
-                  label: '粘贴',
-                  emoji: '📝',
-                  onTap: _paste,
-                ),
-                _OverlayToolButton(
-                  icon: Icons.select_all,
-                  label: '全选',
-                  emoji: '✅',
-                  onTap: _selectAll,
-                ),
-                const VerticalDivider(width: 12),
-                _OverlayToolButton(
-                  icon: Icons.open_in_full,
-                  label: '扩写',
-                  emoji: '🔺',
-                  onTap: hasSelection ? widget.onExpand : null,
-                ),
-                _OverlayToolButton(
-                  icon: Icons.short_text,
-                  label: '缩写',
-                  emoji: '🔻',
-                  onTap: hasSelection ? widget.onShrink : null,
-                ),
-                _OverlayToolButton(
-                  icon: Icons.edit,
-                  label: '改写',
-                  emoji: '✏️',
-                  onTap: hasSelection ? widget.onRewrite : null,
-                ),
-                _OverlayToolButton(
-                  icon: Icons.arrow_forward,
-                  label: '定向',
-                  emoji: '🎯',
-                  onTap: hasSelection ? widget.onDirectedContinuation : null,
-                ),
-                const VerticalDivider(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.close, size: 18),
-                  onPressed: widget.onDismiss,
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _OverlayToolButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String emoji;
-  final VoidCallback? onTap;
-
-  const _OverlayToolButton({
-    required this.icon,
-    required this.label,
-    required this.emoji,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final enabled = onTap != null;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        constraints: const BoxConstraints(minWidth: 52, minHeight: 52),
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(emoji, style: const TextStyle(fontSize: 16)),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10,
-                color: enabled ? Colors.black87 : Colors.grey.shade400,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class WritingScreen extends StatefulWidget {
   const WritingScreen({super.key});
 
@@ -260,6 +30,9 @@ class _WritingScreenState extends State<WritingScreen> {
   final FocusNode _focusNode = FocusNode();
   bool _showDirectionSelector = false;
   int _currentTabIndex = 0; // 0=创作, 1=一行续写, 2=创造世界
+  
+  // 自定义文本选择控制器
+  late final CustomTextSelectionControls _selectionControls;
   List<String> _continuationOptions = []; // 续写多选项
   bool _showContinuationOptions = false;
   bool _isGenerating = false; // 续写进行中
@@ -274,13 +47,6 @@ class _WritingScreenState extends State<WritingScreen> {
   int _lastHandledTriggerCount = 0;
   bool _isAutoGenerating = false;
   String? _autoContinuePendingContent; // 显式模式等待用户决策的续写内容
-
-  // 文字选择工具栏状态
-  bool _showSelectionToolbar = false;
-  String _selectedText = '';
-  int _selectionStart = 0;
-  int _selectionEnd = 0;
-  OverlayEntry? _selectionToolbarOverlay;
 
   static const String _browserUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
@@ -299,6 +65,14 @@ class _WritingScreenState extends State<WritingScreen> {
       }
     });
     _contentController.addListener(_onContentChanged);
+    
+    // 初始化自定义文本选择控制器
+    _selectionControls = CustomTextSelectionControls(
+      onExpand: _onExpandSelectedText,
+      onShrink: _onShrinkSelectedText,
+      onRewrite: _onRewriteSelectedText,
+      onContinueWrite: _onDirectedContinuationSelectedText,
+    );
   }
 
   void _loadSavedContent() {
@@ -309,26 +83,6 @@ class _WritingScreenState extends State<WritingScreen> {
   }
 
   void _onContentChanged() {
-    // 检测选择状态
-    final selection = _contentController.selection;
-    final hasSelection = selection.isValid && !selection.isCollapsed && selection.end <= _contentController.text.length;
-    final selectedText = hasSelection ? _contentController.text.substring(selection.start, selection.end) : '';
-    
-    if (hasSelection != _showSelectionToolbar || (hasSelection && selectedText != _selectedText)) {
-      setState(() {
-        _showSelectionToolbar = hasSelection;
-        _selectedText = selectedText;
-        _selectionStart = selection.start;
-        _selectionEnd = selection.end;
-      });
-      // 管理 OverlayEntry
-      if (hasSelection) {
-        _insertSelectionToolbarOverlay();
-      } else {
-        _removeSelectionToolbarOverlay();
-      }
-    }
-    
     final provider = context.read<WritingProvider>();
     final prevTriggerCount = provider.state.autoContinueTriggerCount;
     provider.setContent(_contentController.text);
@@ -342,35 +96,6 @@ class _WritingScreenState extends State<WritingScreen> {
       _lastHandledTriggerCount = newTriggerCount;
       _runAutoContinue(provider);
     }
-  }
-
-  void _insertSelectionToolbarOverlay() {
-    _removeSelectionToolbarOverlay();
-    _selectionToolbarOverlay = OverlayEntry(
-      builder: (context) => _SelectionToolbarOverlay(
-        selectedText: _selectedText,
-        selectionStart: _selectionStart,
-        selectionEnd: _selectionEnd,
-        controller: _contentController,
-        onExpand: () => _onExpandSelectedWithText(_selectedText, TextSelection(baseOffset: _selectionStart, extentOffset: _selectionEnd)),
-        onShrink: () => _onShrinkSelectedWithText(_selectedText, TextSelection(baseOffset: _selectionStart, extentOffset: _selectionEnd)),
-        onRewrite: () => _onRewriteSelectedWithText(_selectedText, TextSelection(baseOffset: _selectionStart, extentOffset: _selectionEnd)),
-        onDirectedContinuation: () => _onDirectedContinuationSelectedWithText(_selectedText, TextSelection(baseOffset: _selectionStart, extentOffset: _selectionEnd)),
-        onDismiss: () {
-          _removeSelectionToolbarOverlay();
-          setState(() {
-            _showSelectionToolbar = false;
-            _selectedText = '';
-          });
-        },
-      ),
-    );
-    Overlay.of(context).insert(_selectionToolbarOverlay!);
-  }
-
-  void _removeSelectionToolbarOverlay() {
-    _selectionToolbarOverlay?.remove();
-    _selectionToolbarOverlay = null;
   }
 
   @override
@@ -391,9 +116,9 @@ class _WritingScreenState extends State<WritingScreen> {
     );
   }
 
-  /// 选中文字改写（通过contextMenuBuilder调用）
   /// 选中文字扩写
-  void _onExpandSelectedWithText(String selectedText, TextSelection selection) async {
+  void _onExpandSelectedText(TextEditingValue value, TextSelectionDelegate delegate) async {
+    final selectedText = value.selection.textInside(value.text);
     if (selectedText.isEmpty) return;
     if (selectedText.length < 10) {
       _showSnackBar('选中的文字太少了，至少10个字~');
@@ -447,17 +172,14 @@ class _WritingScreenState extends State<WritingScreen> {
         if (result.isEmpty) throw Exception('扩写返回内容为空');
         
         // 替换选中文字
-        final text = _contentController.text;
-        final newText = text.replaceRange(selection.start, selection.end, result.trim());
-        _contentController.text = newText;
+        final newText = value.text.replaceRange(value.selection.start, value.selection.end, result.trim());
+        delegate.userUpdateTextEditingValue(
+          TextEditingValue(text: newText, selection: TextSelection.collapsed(offset: (value.selection.start as int) + (result.trim().length as int))),
+          SelectionChangedCause.toolbar,
+        );
         provider.setContent(newText);
         
         setState(() => _isGenerating = false);
-        _removeSelectionToolbarOverlay();
-        setState(() {
-          _showSelectionToolbar = false;
-          _selectedText = '';
-        });
         _showSnackBar('扩写成功~');
       } else {
         throw Exception('API错误 ${response.statusCode}');
@@ -469,7 +191,8 @@ class _WritingScreenState extends State<WritingScreen> {
   }
 
   /// 选中文字缩写
-  void _onShrinkSelectedWithText(String selectedText, TextSelection selection) async {
+  void _onShrinkSelectedText(TextEditingValue value, TextSelectionDelegate delegate) async {
+    final selectedText = value.selection.textInside(value.text);
     if (selectedText.isEmpty) return;
     if (selectedText.length < 20) {
       _showSnackBar('选中的文字太少了，至少20个字才能缩写~');
@@ -522,17 +245,14 @@ class _WritingScreenState extends State<WritingScreen> {
         if (result.isEmpty) throw Exception('缩写返回内容为空');
         
         // 替换选中文字
-        final text = _contentController.text;
-        final newText = text.replaceRange(selection.start, selection.end, result.trim());
-        _contentController.text = newText;
+        final newText = value.text.replaceRange(value.selection.start, value.selection.end, result.trim());
+        delegate.userUpdateTextEditingValue(
+          TextEditingValue(text: newText, selection: TextSelection.collapsed(offset: (value.selection.start as int) + (result.trim().length as int))),
+          SelectionChangedCause.toolbar,
+        );
         provider.setContent(newText);
         
         setState(() => _isGenerating = false);
-        _removeSelectionToolbarOverlay();
-        setState(() {
-          _showSelectionToolbar = false;
-          _selectedText = '';
-        });
         _showSnackBar('缩写成功~');
       } else {
         throw Exception('API错误 ${response.statusCode}');
@@ -544,7 +264,8 @@ class _WritingScreenState extends State<WritingScreen> {
   }
 
   /// 选中文字改写
-  void _onRewriteSelectedWithText(String selectedText, TextSelection selection) async {
+  void _onRewriteSelectedText(TextEditingValue value, TextSelectionDelegate delegate) async {
+    final selectedText = value.selection.textInside(value.text);
     if (selectedText.isEmpty) return;
     if (selectedText.length < 10) {
       _showSnackBar('选中的文字太少了，至少10个字~');
@@ -597,17 +318,14 @@ class _WritingScreenState extends State<WritingScreen> {
         if (result.isEmpty) throw Exception('改写返回内容为空');
         
         // 替换选中文字
-        final text = _contentController.text;
-        final newText = text.replaceRange(selection.start, selection.end, result.trim());
-        _contentController.text = newText;
+        final newText = value.text.replaceRange(value.selection.start, value.selection.end, result.trim());
+        delegate.userUpdateTextEditingValue(
+          TextEditingValue(text: newText, selection: TextSelection.collapsed(offset: (value.selection.start as int) + (result.trim().length as int))),
+          SelectionChangedCause.toolbar,
+        );
         provider.setContent(newText);
         
         setState(() => _isGenerating = false);
-        _removeSelectionToolbarOverlay();
-        setState(() {
-          _showSelectionToolbar = false;
-          _selectedText = '';
-        });
         _showSnackBar('改写成功~');
       } else {
         throw Exception('API错误 ${response.statusCode}');
@@ -619,7 +337,8 @@ class _WritingScreenState extends State<WritingScreen> {
   }
 
   /// 选中文字定向续写
-  void _onDirectedContinuationSelectedWithText(String selectedText, TextSelection selection) async {
+  void _onDirectedContinuationSelectedText(TextEditingValue value, TextSelectionDelegate delegate) async {
+    final selectedText = value.selection.textInside(value.text);
     if (selectedText.isEmpty) return;
     if (selectedText.length < 10) {
       _showSnackBar('选中的文字太少了，至少10个字~');
@@ -685,17 +404,14 @@ $directionDesc
         if (result.isEmpty) throw Exception('定向续写返回内容为空');
         
         // 替换选中文字
-        final text = _contentController.text;
-        final newText = text.replaceRange(selection.start, selection.end, result.trim());
-        _contentController.text = newText;
+        final newText = value.text.replaceRange(value.selection.start, value.selection.end, result.trim());
+        delegate.userUpdateTextEditingValue(
+          TextEditingValue(text: newText, selection: TextSelection.collapsed(offset: (value.selection.start as int) + (result.trim().length as int))),
+          SelectionChangedCause.toolbar,
+        );
         provider.setContent(newText);
         
         setState(() => _isGenerating = false);
-        _removeSelectionToolbarOverlay();
-        setState(() {
-          _showSelectionToolbar = false;
-          _selectedText = '';
-        });
         _showSnackBar('定向续写成功~');
       } else {
         throw Exception('API错误 ${response.statusCode}');
@@ -1443,12 +1159,36 @@ $directionDesc
                 color: AppColors.ink,
                 height: 1.8,
               ),
-              // 屏蔽原生选择菜单
+              // 使用自定义文本选择控制器（粉色手柄）
+              selectionControls: _selectionControls,
+              // 自定义工具栏
               contextMenuBuilder: (context, editableTextState) {
-                return const SizedBox.shrink();
+                final TextEditingValue value = editableTextState.textEditingValue;
+                final TextSelection selection = value.selection;
+                final bool hasSelection = selection.isValid && !selection.isCollapsed;
+                final bool canPaste = false; // simplified
+                
+                // 计算工具栏位置
+                final endpoints = selection.extentOffset != selection.baseOffset
+                    ? <TextSelectionPoint>[
+                        TextSelectionPoint(Offset(0, 0), TextDirection.ltr),
+                        TextSelectionPoint(Offset(100, 0), TextDirection.ltr),
+                      ]
+                    : <TextSelectionPoint>[];
+                
+                return CustomSelectionToolbar(
+                  hasSelectedText: hasSelection,
+                  canPaste: canPaste,
+                  onCut: () => editableTextState.cutSelection(SelectionChangedCause.toolbar),
+                  onCopy: () => editableTextState.copySelection(SelectionChangedCause.toolbar),
+                  onPaste: () => editableTextState.pasteText(SelectionChangedCause.toolbar),
+                  onSelectAll: () => editableTextState.selectAll(SelectionChangedCause.toolbar),
+                  onExpand: () => _onExpandSelectedText(value, editableTextState),
+                  onShrink: () => _onShrinkSelectedText(value, editableTextState),
+                  onRewrite: () => _onRewriteSelectedText(value, editableTextState),
+                  onContinueWrite: () => _onDirectedContinuationSelectedText(value, editableTextState),
+                );
               },
-              // 使用不可见的自定义选择控制器去除黑黄手柄
-              selectionControls: _invisibleSelectionControls,
               decoration: InputDecoration(
                 hintText: '在此处开始写作...',
                 hintStyle: TextStyle(
