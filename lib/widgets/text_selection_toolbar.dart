@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 typedef SelectionMenuAction = void Function(TextEditingValue value, TextSelectionDelegate delegate);
 
 /// 自定义文本选择控制器
-/// 继承 MaterialTextSelectionControls，完整实现自定义工具栏
+/// 继承 MaterialTextSelectionControls
 class CustomTextSelectionControls extends MaterialTextSelectionControls {
   final SelectionMenuAction onExpand;
   final SelectionMenuAction onShrink;
@@ -20,7 +20,6 @@ class CustomTextSelectionControls extends MaterialTextSelectionControls {
     required this.onContinueWrite,
   });
 
-  // ✅ 核心修复：返回实际的自定义工具栏（不再返回空）
   @override
   Widget buildToolbar(
     BuildContext context,
@@ -34,54 +33,62 @@ class CustomTextSelectionControls extends MaterialTextSelectionControls {
   ) {
     final TextEditingValue editingValue = delegate.textEditingValue;
     final bool hasValidSelection = !editingValue.selection.isCollapsed && editingValue.selection.isValid;
+    final MediaQueryData mediaQuery = MediaQuery.of(context);
+    final Size screenSize = mediaQuery.size;
+    final EdgeInsets safePadding = mediaQuery.padding;
 
-    // 计算工具栏安全位置（避免贴屏幕边缘被截断）
-    final double screenWidth = MediaQuery.of(context).size.width;
+    // 安全工具栏锚点计算
     const double toolbarWidth = 380;
-    // 锚点X轴限制在屏幕内
-    final double anchorX = selectionMidpoint.dx.clamp(toolbarWidth / 2 + 16, screenWidth - toolbarWidth / 2 - 16);
-    // 锚点Y轴放在选中文本的上方
-    final double anchorY = endpoints.first.point.dy - textLineHeight * 3.2;
+    const double toolbarHeight = 160;
+    final double anchorX = selectionMidpoint.dx.clamp(
+      toolbarWidth / 2 + 16,
+      screenSize.width - toolbarWidth / 2 - 16,
+    );
+    final double topAvailableSpace = endpoints.first.point.dy - safePadding.top - toolbarHeight - 10;
+    final double anchorY = topAvailableSpace > 0
+        ? endpoints.first.point.dy - toolbarHeight - 8
+        : endpoints.last.point.dy + textLineHeight + 8;
     final Offset toolbarAnchor = Offset(anchorX, anchorY);
 
+    // ✅ 修复：给工具栏套上Material，解决InkWell红屏崩溃
     return Positioned.fromRect(
-      rect: Rect.fromCenter(center: toolbarAnchor, width: toolbarWidth, height: 160),
-      child: CustomSelectionToolbar(
-        hasSelectedText: hasValidSelection,
-        canPaste: clipboardStatus?.value == ClipboardStatus.pasteable,
-        onCut: hasValidSelection ? () => _doCut(editingValue, delegate) : () {},
-        onCopy: hasValidSelection ? () => _doCopy(editingValue, delegate) : () {},
-        onPaste: () => _doPaste(delegate),
-        onSelectAll: () => delegate.selectAll(SelectionChangedCause.toolbar),
-        onExpand: hasValidSelection ? () => onExpand(editingValue, delegate) : () {},
-        onShrink: hasValidSelection ? () => onShrink(editingValue, delegate) : () {},
-        onRewrite: hasValidSelection ? () => onRewrite(editingValue, delegate) : () {},
-        onContinueWrite: hasValidSelection ? () => onContinueWrite(editingValue, delegate) : () {},
-      ),
-    );
-  }
-
-  // 手柄样式：粉色圆形
-  @override
-  Widget buildHandle(BuildContext context, TextSelectionHandleType type, double textLineHeight, [VoidCallback? onTap]) {
-    return GestureDetector(
-      onTap: onTap,
-      child: SizedBox(
-        width: 22,
-        height: 22,
-        child: Container(
-          decoration: const BoxDecoration(
-            color: Color(0xFFFF6B9D),
-            shape: BoxShape.circle,
-            boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 2, offset: Offset(0, 1))],
-          ),
+      rect: Rect.fromCenter(center: toolbarAnchor, width: toolbarWidth, height: toolbarHeight),
+      child: Material(
+        type: MaterialType.transparency,
+        child: CustomSelectionToolbar(
+          hasSelectedText: hasValidSelection,
+          canPaste: clipboardStatus?.value == ClipboardStatus.pasteable,
+          onCut: hasValidSelection ? () => _doCut(editingValue, delegate) : null,
+          onCopy: hasValidSelection ? () => _doCopy(editingValue, delegate) : null,
+          onPaste: () => _doPaste(delegate),
+          onSelectAll: () => delegate.selectAll(SelectionChangedCause.toolbar),
+          onExpand: hasValidSelection ? () => onExpand(editingValue, delegate) : null,
+          onShrink: hasValidSelection ? () => onShrink(editingValue, delegate) : null,
+          onRewrite: hasValidSelection ? () => onRewrite(editingValue, delegate) : null,
+          onContinueWrite: hasValidSelection ? () => onContinueWrite(editingValue, delegate) : null,
         ),
       ),
     );
   }
 
   @override
-  Size get handleSize => const Size(22, 22);
+  Widget buildHandle(BuildContext context, TextSelectionHandleType type, double textLineHeight, [VoidCallback? onTap]) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 24,
+        height: 24,
+        decoration: const BoxDecoration(
+          color: Color(0xFFFF6B9D),
+          shape: BoxShape.circle,
+          boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 2, offset: Offset(0, 1))],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Size get handleSize => const Size(24, 24);
 
   // 剪切
   void _doCut(TextEditingValue value, TextSelectionDelegate delegate) {
@@ -114,18 +121,18 @@ class CustomTextSelectionControls extends MaterialTextSelectionControls {
   }
 }
 
-/// 自定义工具栏UI
+/// 自定义工具栏Widget
 class CustomSelectionToolbar extends StatelessWidget {
   final bool hasSelectedText;
   final bool canPaste;
-  final VoidCallback onCut;
-  final VoidCallback onCopy;
-  final VoidCallback onPaste;
-  final VoidCallback onSelectAll;
-  final VoidCallback onExpand;
-  final VoidCallback onShrink;
-  final VoidCallback onRewrite;
-  final VoidCallback onContinueWrite;
+  final VoidCallback? onCut;
+  final VoidCallback? onCopy;
+  final VoidCallback? onPaste;
+  final VoidCallback? onSelectAll;
+  final VoidCallback? onExpand;
+  final VoidCallback? onShrink;
+  final VoidCallback? onRewrite;
+  final VoidCallback? onContinueWrite;
 
   const CustomSelectionToolbar({
     super.key,
@@ -144,6 +151,8 @@ class CustomSelectionToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: 380,
+      height: 160,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       decoration: BoxDecoration(
         color: const Color(0xFF2B2B2B),
@@ -152,26 +161,26 @@ class CustomSelectionToolbar extends StatelessWidget {
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           // 第一行按钮
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildButton(icon: Icons.content_cut, label: '剪切', onTap: hasSelectedText ? onCut : null),
-              _buildButton(icon: Icons.copy, label: '复制', onTap: hasSelectedText ? onCopy : null),
+              _buildButton(icon: Icons.content_cut, label: '剪切', onTap: onCut),
+              _buildButton(icon: Icons.copy, label: '复制', onTap: onCopy),
               _buildButton(icon: Icons.content_paste, label: '粘贴', onTap: canPaste ? onPaste : null),
               _buildButton(icon: Icons.select_all, label: '全选', onTap: onSelectAll),
-              _buildButton(icon: Icons.text_fields, label: '扩写', onTap: hasSelectedText ? onExpand : null),
+              _buildButton(icon: Icons.text_fields, label: '扩写', onTap: onExpand),
             ],
           ),
-          const SizedBox(height: 12),
           // 第二行按钮
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _buildButton(icon: Icons.compress, label: '缩写', onTap: hasSelectedText ? onShrink : null),
-              _buildButton(icon: Icons.edit, label: '改写', onTap: hasSelectedText ? onRewrite : null),
-              _buildButton(icon: Icons.arrow_forward, label: '定向续写', onTap: hasSelectedText ? onContinueWrite : null),
+              _buildButton(icon: Icons.compress, label: '缩写', onTap: onShrink),
+              _buildButton(icon: Icons.edit, label: '改写', onTap: onRewrite),
+              _buildButton(icon: Icons.arrow_forward, label: '定向续写', onTap: onContinueWrite),
             ],
           ),
         ],
