@@ -178,7 +178,8 @@ public class NativeEditText implements PlatformView, Callback {
 
     @Override
     public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
-        return false;
+        // Return true to indicate the menu is ready
+        return true;
     }
 
     @Override
