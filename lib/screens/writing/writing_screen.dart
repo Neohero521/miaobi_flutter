@@ -1159,36 +1159,8 @@ $directionDesc
                 color: AppColors.ink,
                 height: 1.8,
               ),
-              // 使用自定义文本选择控制器（粉色手柄）
+              // 使用自定义文本选择控制器（粉色手柄+双行工具栏）
               selectionControls: _selectionControls,
-              // 自定义工具栏
-              contextMenuBuilder: (context, editableTextState) {
-                final TextEditingValue value = editableTextState.textEditingValue;
-                final TextSelection selection = value.selection;
-                final bool hasSelection = selection.isValid && !selection.isCollapsed;
-                final bool canPaste = false; // simplified
-                
-                // 计算工具栏位置
-                final endpoints = selection.extentOffset != selection.baseOffset
-                    ? <TextSelectionPoint>[
-                        TextSelectionPoint(Offset(0, 0), TextDirection.ltr),
-                        TextSelectionPoint(Offset(100, 0), TextDirection.ltr),
-                      ]
-                    : <TextSelectionPoint>[];
-                
-                return CustomSelectionToolbar(
-                  hasSelectedText: hasSelection,
-                  canPaste: canPaste,
-                  onCut: () => editableTextState.cutSelection(SelectionChangedCause.toolbar),
-                  onCopy: () => editableTextState.copySelection(SelectionChangedCause.toolbar),
-                  onPaste: () => editableTextState.pasteText(SelectionChangedCause.toolbar),
-                  onSelectAll: () => editableTextState.selectAll(SelectionChangedCause.toolbar),
-                  onExpand: () => _onExpandSelectedText(value, editableTextState),
-                  onShrink: () => _onShrinkSelectedText(value, editableTextState),
-                  onRewrite: () => _onRewriteSelectedText(value, editableTextState),
-                  onContinueWrite: () => _onDirectedContinuationSelectedText(value, editableTextState),
-                );
-              },
               decoration: InputDecoration(
                 hintText: '在此处开始写作...',
                 hintStyle: TextStyle(

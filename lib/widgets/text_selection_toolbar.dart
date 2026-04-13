@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 typedef SelectionMenuAction = void Function(TextEditingValue value, TextSelectionDelegate delegate);
 
 /// 自定义文本选择控制器
-/// 继承 MaterialTextSelectionControls，重写手柄样式
+/// 继承 MaterialTextSelectionControls，完整实现自定义工具栏
 class CustomTextSelectionControls extends MaterialTextSelectionControls {
   final SelectionMenuAction onExpand;
   final SelectionMenuAction onShrink;
@@ -20,23 +20,7 @@ class CustomTextSelectionControls extends MaterialTextSelectionControls {
     required this.onContinueWrite,
   });
 
-  // 重写手柄样式：返回粉色圆形
-  @override
-  Widget buildHandle(BuildContext context, TextSelectionHandleType type, double textLineHeight, [VoidCallback? onTap]) {
-    return SizedBox(
-      width: 22,
-      height: 22,
-      child: Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFFFF6B9D),
-          shape: BoxShape.circle,
-          boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 2, offset: Offset(0, 1))],
-        ),
-      ),
-    );
-  }
-
-  // 禁用原生工具栏（由 contextMenuBuilder 完全替代）
+  // ✅ 核心修复：返回实际的自定义工具栏（不再返回空）
   @override
   Widget buildToolbar(
     BuildContext context,
@@ -48,11 +32,89 @@ class CustomTextSelectionControls extends MaterialTextSelectionControls {
     ValueListenable<ClipboardStatus>? clipboardStatus,
     Offset? lastSecondaryTapDownPosition,
   ) {
-    return const SizedBox.shrink();
+    final TextEditingValue editingValue = delegate.textEditingValue;
+    final bool hasValidSelection = !editingValue.selection.isCollapsed && editingValue.selection.isValid;
+
+    // 计算工具栏安全位置（避免贴屏幕边缘被截断）
+    final double screenWidth = MediaQuery.of(context).size.width;
+    const double toolbarWidth = 380;
+    // 锚点X轴限制在屏幕内
+    final double anchorX = selectionMidpoint.dx.clamp(toolbarWidth / 2 + 16, screenWidth - toolbarWidth / 2 - 16);
+    // 锚点Y轴放在选中文本的上方
+    final double anchorY = endpoints.first.point.dy - textLineHeight * 3.2;
+    final Offset toolbarAnchor = Offset(anchorX, anchorY);
+
+    return Positioned.fromRect(
+      rect: Rect.fromCenter(center: toolbarAnchor, width: toolbarWidth, height: 160),
+      child: CustomSelectionToolbar(
+        hasSelectedText: hasValidSelection,
+        canPaste: clipboardStatus?.value == ClipboardStatus.pasteable,
+        onCut: hasValidSelection ? () => _doCut(editingValue, delegate) : () {},
+        onCopy: hasValidSelection ? () => _doCopy(editingValue, delegate) : () {},
+        onPaste: () => _doPaste(delegate),
+        onSelectAll: () => delegate.selectAll(SelectionChangedCause.toolbar),
+        onExpand: hasValidSelection ? () => onExpand(editingValue, delegate) : () {},
+        onShrink: hasValidSelection ? () => onShrink(editingValue, delegate) : () {},
+        onRewrite: hasValidSelection ? () => onRewrite(editingValue, delegate) : () {},
+        onContinueWrite: hasValidSelection ? () => onContinueWrite(editingValue, delegate) : () {},
+      ),
+    );
+  }
+
+  // 手柄样式：粉色圆形
+  @override
+  Widget buildHandle(BuildContext context, TextSelectionHandleType type, double textLineHeight, [VoidCallback? onTap]) {
+    return GestureDetector(
+      onTap: onTap,
+      child: SizedBox(
+        width: 22,
+        height: 22,
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFFFF6B9D),
+            shape: BoxShape.circle,
+            boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 2, offset: Offset(0, 1))],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Size get handleSize => const Size(22, 22);
+
+  // 剪切
+  void _doCut(TextEditingValue value, TextSelectionDelegate delegate) {
+    final text = value.selection.textInside(value.text);
+    Clipboard.setData(ClipboardData(text: text));
+    final newText = value.text.replaceRange(value.selection.start, value.selection.end, '');
+    delegate.userUpdateTextEditingValue(
+      TextEditingValue(text: newText, selection: TextSelection.collapsed(offset: value.selection.start)),
+      SelectionChangedCause.toolbar,
+    );
+  }
+
+  // 复制
+  void _doCopy(TextEditingValue value, TextSelectionDelegate delegate) {
+    final text = value.selection.textInside(value.text);
+    Clipboard.setData(ClipboardData(text: text));
+  }
+
+  // 粘贴
+  void _doPaste(TextSelectionDelegate delegate) async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (data?.text != null) {
+      final value = delegate.textEditingValue;
+      final newText = value.text.replaceRange(value.selection.start, value.selection.end, data!.text!);
+      delegate.userUpdateTextEditingValue(
+        TextEditingValue(text: newText, selection: TextSelection.collapsed(offset: value.selection.start + data!.text!.length)),
+        SelectionChangedCause.toolbar,
+      );
+    }
   }
 }
 
-/// 自定义工具栏Widget
+/// 自定义工具栏UI
 class CustomSelectionToolbar extends StatelessWidget {
   final bool hasSelectedText;
   final bool canPaste;
@@ -120,20 +182,23 @@ class CustomSelectionToolbar extends StatelessWidget {
   Widget _buildButton({required IconData icon, required String label, VoidCallback? onTap}) {
     final bool enabled = onTap != null;
     return InkWell(
-      onTap: onTap,
+      onTap: () {
+        onTap?.call();
+        FocusManager.instance.primaryFocus?.unfocus();
+      },
       borderRadius: BorderRadius.circular(8),
       child: Opacity(
         opacity: enabled ? 1.0 : 0.4,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: Colors.white, size: 20),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: const TextStyle(color: Colors.white, fontSize: 11),
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: Colors.white, size: 20),
+              const SizedBox(height: 3),
+              Text(label, style: const TextStyle(color: Colors.white, fontSize: 11)),
+            ],
+          ),
         ),
       ),
     );
