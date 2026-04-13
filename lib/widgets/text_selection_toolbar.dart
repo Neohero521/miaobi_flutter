@@ -35,6 +35,21 @@ class CustomTextSelectionControls extends MaterialTextSelectionControls {
       ),
     );
   }
+
+  // 禁用原生工具栏（由 contextMenuBuilder 完全替代）
+  @override
+  Widget buildToolbar(
+    BuildContext context,
+    Rect globalEditableRegion,
+    double textLineHeight,
+    Offset selectionMidpoint,
+    List<TextSelectionPoint> endpoints,
+    TextSelectionDelegate delegate,
+    ValueListenable<ClipboardStatus>? clipboardStatus,
+    Offset? lastSecondaryTapDownPosition,
+  ) {
+    return const SizedBox.shrink();
+  }
 }
 
 /// 自定义工具栏Widget
