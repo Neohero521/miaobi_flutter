@@ -39,10 +39,6 @@ class _WritingScreenState extends State<WritingScreen> {
   int _oneLineSelectedIndex = -1;
   bool _oneLineGenerating = false;
 
-  // 文字选择工具栏状态
-  bool _showSelectionToolbar = false;
-  String _selectedText = '';
-
   // 自动续写相关状态
   int _lastHandledTriggerCount = 0;
   bool _isAutoGenerating = false;
@@ -75,22 +71,6 @@ class _WritingScreenState extends State<WritingScreen> {
   }
 
   void _onContentChanged() {
-    // 检测选择状态
-    final selection = _contentController.selection;
-    final hasSelection = selection.isValid && !selection.isCollapsed && selection.end <= _contentController.text.length;
-    final selectedText = hasSelection ? _contentController.text.substring(selection.start, selection.end) : '';
-    
-    if (hasSelection != _showSelectionToolbar || (hasSelection && selectedText != _selectedText)) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          setState(() {
-            _showSelectionToolbar = hasSelection;
-            _selectedText = selectedText;
-          });
-        }
-      });
-    }
-    
     final provider = context.read<WritingProvider>();
     final prevTriggerCount = provider.state.autoContinueTriggerCount;
     provider.setContent(_contentController.text);
@@ -124,11 +104,10 @@ class _WritingScreenState extends State<WritingScreen> {
     );
   }
 
+  /// 选中文字改写（通过contextMenuBuilder调用）
   /// 选中文字扩写
-  void _onExpandSelected() async {
-    final selection = _contentController.selection;
-    if (!selection.isValid || selection.isCollapsed) return;
-    final selectedText = _contentController.text.substring(selection.start, selection.end);
+  void _onExpandSelectedWithText(String selectedText, TextSelection selection) async {
+    if (selectedText.isEmpty) return;
     if (selectedText.length < 10) {
       _showSnackBar('选中的文字太少了，至少10个字~');
       return;
@@ -186,10 +165,7 @@ class _WritingScreenState extends State<WritingScreen> {
         _contentController.text = newText;
         provider.setContent(newText);
         
-        setState(() {
-          _showSelectionToolbar = false;
-          _isGenerating = false;
-        });
+        setState(() => _isGenerating = false);
         _showSnackBar('扩写成功~');
       } else {
         throw Exception('API错误 ${response.statusCode}');
@@ -201,10 +177,8 @@ class _WritingScreenState extends State<WritingScreen> {
   }
 
   /// 选中文字缩写
-  void _onShrinkSelected() async {
-    final selection = _contentController.selection;
-    if (!selection.isValid || selection.isCollapsed) return;
-    final selectedText = _contentController.text.substring(selection.start, selection.end);
+  void _onShrinkSelectedWithText(String selectedText, TextSelection selection) async {
+    if (selectedText.isEmpty) return;
     if (selectedText.length < 20) {
       _showSnackBar('选中的文字太少了，至少20个字才能缩写~');
       return;
@@ -261,10 +235,7 @@ class _WritingScreenState extends State<WritingScreen> {
         _contentController.text = newText;
         provider.setContent(newText);
         
-        setState(() {
-          _showSelectionToolbar = false;
-          _isGenerating = false;
-        });
+        setState(() => _isGenerating = false);
         _showSnackBar('缩写成功~');
       } else {
         throw Exception('API错误 ${response.statusCode}');
@@ -276,10 +247,8 @@ class _WritingScreenState extends State<WritingScreen> {
   }
 
   /// 选中文字改写
-  void _onRewriteSelected() async {
-    final selection = _contentController.selection;
-    if (!selection.isValid || selection.isCollapsed) return;
-    final selectedText = _contentController.text.substring(selection.start, selection.end);
+  void _onRewriteSelectedWithText(String selectedText, TextSelection selection) async {
+    if (selectedText.isEmpty) return;
     if (selectedText.length < 10) {
       _showSnackBar('选中的文字太少了，至少10个字~');
       return;
@@ -336,10 +305,7 @@ class _WritingScreenState extends State<WritingScreen> {
         _contentController.text = newText;
         provider.setContent(newText);
         
-        setState(() {
-          _showSelectionToolbar = false;
-          _isGenerating = false;
-        });
+        setState(() => _isGenerating = false);
         _showSnackBar('改写成功~');
       } else {
         throw Exception('API错误 ${response.statusCode}');
@@ -351,10 +317,8 @@ class _WritingScreenState extends State<WritingScreen> {
   }
 
   /// 选中文字定向续写
-  void _onDirectedContinuationSelected() async {
-    final selection = _contentController.selection;
-    if (!selection.isValid || selection.isCollapsed) return;
-    final selectedText = _contentController.text.substring(selection.start, selection.end);
+  void _onDirectedContinuationSelectedWithText(String selectedText, TextSelection selection) async {
+    if (selectedText.isEmpty) return;
     if (selectedText.length < 10) {
       _showSnackBar('选中的文字太少了，至少10个字~');
       return;
@@ -370,7 +334,6 @@ class _WritingScreenState extends State<WritingScreen> {
       return;
     }
     
-    // 检查是否选择了方向
     if (provider.state.selectedDirections.isEmpty) {
       _showSnackBar('请先选择续写方向~');
       return;
@@ -425,10 +388,7 @@ $directionDesc
         _contentController.text = newText;
         provider.setContent(newText);
         
-        setState(() {
-          _showSelectionToolbar = false;
-          _isGenerating = false;
-        });
+        setState(() => _isGenerating = false);
         _showSnackBar('定向续写成功~');
       } else {
         throw Exception('API错误 ${response.statusCode}');
@@ -1141,63 +1101,62 @@ $directionDesc
         
         // 编辑区域
         Expanded(
-          child: Stack(
-            children: [
-              Container(
-                margin: const EdgeInsets.all(16),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.typewriterPaper,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+          child: Container(
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.typewriterPaper,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
                 ),
-                child: TextField(
-                  controller: _contentController,
-                  focusNode: _focusNode,
-                  maxLines: null,
-                  expands: true,
-                  textAlignVertical: TextAlignVertical.top,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: AppColors.ink,
-                    height: 1.8,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: '在此处开始写作...',
-                    hintStyle: TextStyle(
-                      color: AppColors.hint.withOpacity(0.45),
-                      fontSize: 16,
-                    ),
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
+              ],
+            ),
+            child: TextField(
+              controller: _contentController,
+              focusNode: _focusNode,
+              maxLines: null,
+              expands: true,
+              textAlignVertical: TextAlignVertical.top,
+              style: const TextStyle(
+                fontSize: 16,
+                color: AppColors.ink,
+                height: 1.8,
               ),
-              // 文字选择工具栏
-              if (_showSelectionToolbar)
-                Positioned(
-                  top: 24,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: SelectionActionToolbar(
-                      selectedText: _selectedText,
-                      controller: _contentController,
-                      onExpand: _onExpandSelected,
-                      onShrink: _onShrinkSelected,
-                      onRewrite: _onRewriteSelected,
-                      onDirectedContinuation: _onDirectedContinuationSelected,
-                      onDismiss: () => setState(() => _showSelectionToolbar = false),
-                    ),
-                  ),
+              decoration: InputDecoration(
+                hintText: '在此处开始写作...',
+                hintStyle: TextStyle(
+                  color: AppColors.hint.withOpacity(0.45),
+                  fontSize: 16,
                 ),
-            ],
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+              ),
+              // 禁用原生工具栏，用自定义工具栏替代
+              contextMenuBuilder: (context, editableTextState) {
+                final selection = editableTextState.textEditingValue.selection;
+                final text = editableTextState.textEditingValue.text;
+                final selectedText = selection.isValid && !selection.isCollapsed
+                    ? text.substring(selection.start, selection.end) : '';
+                return SelectionActionToolbar(
+                  selectedText: selectedText,
+                  controller: _contentController,
+                  onExpand: () => _onExpandSelectedWithText(selectedText, selection),
+                  onShrink: () => _onShrinkSelectedWithText(selectedText, selection),
+                  onRewrite: () => _onRewriteSelectedWithText(selectedText, selection),
+                  onDirectedContinuation: () => _onDirectedContinuationSelectedWithText(selectedText, selection),
+                  onDismiss: () {
+                    // 取消选择
+                    _contentController.selection = TextSelection.collapsed(
+                      offset: selection.baseOffset,
+                    );
+                  },
+                );
+              },
+            ),
           ),
         ),
 
