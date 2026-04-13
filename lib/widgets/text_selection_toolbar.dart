@@ -2,11 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-// 定义自定义按钮的回调类型
 typedef SelectionMenuAction = void Function(TextEditingValue value, TextSelectionDelegate delegate);
 
-/// 自定义文本选择控制器
-/// 继承 MaterialTextSelectionControls
 class CustomTextSelectionControls extends MaterialTextSelectionControls {
   final SelectionMenuAction onExpand;
   final SelectionMenuAction onShrink;
@@ -37,10 +34,13 @@ class CustomTextSelectionControls extends MaterialTextSelectionControls {
     final Size screenSize = mediaQuery.size;
     final EdgeInsets safePadding = mediaQuery.padding;
 
-    // 安全工具栏锚点计算
-    const double toolbarWidth = 380;
-    const double toolbarHeight = 160;
-    final double anchorX = selectionMidpoint.dx.clamp(
+    // ✅ 自适应宽度：320-380之间，适配所有手机
+    final double maxToolbarWidth = screenSize.width - 32;
+    final double toolbarWidth = maxToolbarWidth.clamp(320.0, 380.0);
+    const double toolbarHeight = 150;
+
+    // ✅ 锚点计算，限制在屏幕可视区域内
+    final double anchorX = (screenSize.width / 2).clamp(
       toolbarWidth / 2 + 16,
       screenSize.width - toolbarWidth / 2 - 16,
     );
@@ -50,12 +50,12 @@ class CustomTextSelectionControls extends MaterialTextSelectionControls {
         : endpoints.last.point.dy + textLineHeight + 8;
     final Offset toolbarAnchor = Offset(anchorX, anchorY);
 
-    // ✅ 修复：给工具栏套上Material，解决InkWell红屏崩溃
     return Positioned.fromRect(
       rect: Rect.fromCenter(center: toolbarAnchor, width: toolbarWidth, height: toolbarHeight),
       child: Material(
         type: MaterialType.transparency,
         child: CustomSelectionToolbar(
+          toolbarWidth: toolbarWidth,
           hasSelectedText: hasValidSelection,
           canPaste: clipboardStatus?.value == ClipboardStatus.pasteable,
           onCut: hasValidSelection ? () => _doCut(editingValue, delegate) : null,
@@ -90,7 +90,6 @@ class CustomTextSelectionControls extends MaterialTextSelectionControls {
   @override
   Size get handleSize => const Size(24, 24);
 
-  // 剪切
   void _doCut(TextEditingValue value, TextSelectionDelegate delegate) {
     final text = value.selection.textInside(value.text);
     Clipboard.setData(ClipboardData(text: text));
@@ -101,13 +100,11 @@ class CustomTextSelectionControls extends MaterialTextSelectionControls {
     );
   }
 
-  // 复制
   void _doCopy(TextEditingValue value, TextSelectionDelegate delegate) {
     final text = value.selection.textInside(value.text);
     Clipboard.setData(ClipboardData(text: text));
   }
 
-  // 粘贴
   void _doPaste(TextSelectionDelegate delegate) async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     if (data?.text != null) {
@@ -121,8 +118,8 @@ class CustomTextSelectionControls extends MaterialTextSelectionControls {
   }
 }
 
-/// 自定义工具栏Widget
 class CustomSelectionToolbar extends StatelessWidget {
+  final double toolbarWidth;
   final bool hasSelectedText;
   final bool canPaste;
   final VoidCallback? onCut;
@@ -136,6 +133,7 @@ class CustomSelectionToolbar extends StatelessWidget {
 
   const CustomSelectionToolbar({
     super.key,
+    required this.toolbarWidth,
     required this.hasSelectedText,
     required this.canPaste,
     required this.onCut,
@@ -151,8 +149,8 @@ class CustomSelectionToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 380,
-      height: 160,
+      width: toolbarWidth,
+      height: 150,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       decoration: BoxDecoration(
         color: const Color(0xFF2B2B2B),
@@ -163,9 +161,10 @@ class CustomSelectionToolbar extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // 第一行按钮
+          // 第一行：5个按钮
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               _buildButton(icon: Icons.content_cut, label: '剪切', onTap: onCut),
               _buildButton(icon: Icons.copy, label: '复制', onTap: onCopy),
@@ -174,9 +173,10 @@ class CustomSelectionToolbar extends StatelessWidget {
               _buildButton(icon: Icons.text_fields, label: '扩写', onTap: onExpand),
             ],
           ),
-          // 第二行按钮
+          // 第二行：4个按钮
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               _buildButton(icon: Icons.compress, label: '缩写', onTap: onShrink),
               _buildButton(icon: Icons.edit, label: '改写', onTap: onRewrite),
@@ -190,22 +190,31 @@ class CustomSelectionToolbar extends StatelessWidget {
 
   Widget _buildButton({required IconData icon, required String label, VoidCallback? onTap}) {
     final bool enabled = onTap != null;
-    return InkWell(
-      onTap: () {
-        onTap?.call();
-        FocusManager.instance.primaryFocus?.unfocus();
-      },
-      borderRadius: BorderRadius.circular(8),
-      child: Opacity(
-        opacity: enabled ? 1.0 : 0.4,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+    return SizedBox(
+      width: 56,
+      child: InkWell(
+        onTap: () {
+          onTap?.call();
+          FocusManager.instance.primaryFocus?.unfocus();
+        },
+        borderRadius: BorderRadius.circular(8),
+        child: Opacity(
+          opacity: enabled ? 1.0 : 0.4,
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon, color: Colors.white, size: 20),
-              const SizedBox(height: 3),
-              Text(label, style: const TextStyle(color: Colors.white, fontSize: 11)),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ],
           ),
         ),
