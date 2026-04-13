@@ -366,7 +366,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Consumer<WritingProvider>(
                 builder: (context, provider, _) {
                   final model = provider.state.selectedModel;
-                  final hasModel = model != null && model.isNotEmpty;
+                  final hasModel = model.isNotEmpty;
                   return Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),

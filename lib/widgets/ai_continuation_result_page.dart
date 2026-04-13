@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/writing_provider.dart';
-import '../models/models.dart';
 import 'continuation_result_cards.dart';
 import 'continuation_action_bar.dart';
 import 'continuation_refresh_zone.dart';
-import 'continuation_ip_character.dart';
 
 /// AI续写结果展示页 - 按设计文档结构
 class AiContinuationResultPage extends StatefulWidget {

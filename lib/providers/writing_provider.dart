@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
@@ -8,7 +7,8 @@ class WritingState {
   final String content;
   final bool isGenerating;
   final WriteStyle selectedStyle;
-  final ContinuationDirection? selectedDirection;
+  final List<ContinuationDirection> selectedDirections;
+  final bool autoContinueEnabled;
   final List<ContinuationSuggestion> suggestions;
   final int wordCount;
   
@@ -62,7 +62,8 @@ class WritingState {
     this.content = '',
     this.isGenerating = false,
     this.selectedStyle = WriteStyle.standard,
-    this.selectedDirection,
+    this.selectedDirections = const [],
+    this.autoContinueEnabled = false,
     this.suggestions = const [],
     this.wordCount = 0,
     this.undoStack = const [],
@@ -94,7 +95,8 @@ class WritingState {
     String? content,
     bool? isGenerating,
     WriteStyle? selectedStyle,
-    ContinuationDirection? selectedDirection,
+    List<ContinuationDirection>? selectedDirections,
+    bool? autoContinueEnabled,
     List<ContinuationSuggestion>? suggestions,
     int? wordCount,
     List<String>? undoStack,
@@ -122,7 +124,8 @@ class WritingState {
       content: content ?? this.content,
       isGenerating: isGenerating ?? this.isGenerating,
       selectedStyle: selectedStyle ?? this.selectedStyle,
-      selectedDirection: selectedDirection ?? this.selectedDirection,
+      selectedDirections: selectedDirections ?? this.selectedDirections,
+      autoContinueEnabled: autoContinueEnabled ?? this.autoContinueEnabled,
       suggestions: suggestions ?? this.suggestions,
       wordCount: wordCount ?? this.wordCount,
       undoStack: undoStack ?? this.undoStack,
@@ -266,8 +269,19 @@ class WritingProvider extends ChangeNotifier {
     notifyListeners();
   }
   
-  void setSelectedDirection(ContinuationDirection? direction) {
-    _state = _state.copyWith(selectedDirection: direction);
+  void toggleDirection(ContinuationDirection direction) {
+    final current = List<ContinuationDirection>.from(_state.selectedDirections);
+    if (current.contains(direction)) {
+      current.remove(direction);
+    } else {
+      current.add(direction);
+    }
+    _state = _state.copyWith(selectedDirections: current);
+    notifyListeners();
+  }
+
+  void setAutoContinue(bool enabled) {
+    _state = _state.copyWith(autoContinueEnabled: enabled);
     notifyListeners();
   }
   
@@ -419,6 +433,20 @@ class WritingProvider extends ChangeNotifier {
       continuationResults: results,
       currentResultIndex: 0,
     );
+    notifyListeners();
+  }
+
+  void clearContinuationResults() {
+    _state = _state.copyWith(
+      continuationStatus: ContinuationStatus.idle,
+      continuationResults: [],
+      currentResultIndex: 0,
+    );
+    notifyListeners();
+  }
+
+  void setOriginalContent(String content) {
+    _state = _state.copyWith(originalContent: content);
     notifyListeners();
   }
   

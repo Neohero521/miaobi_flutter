@@ -43,15 +43,22 @@ class _ContinuationResultCardsState extends State<ContinuationResultCards> {
   Widget build(BuildContext context) {
     if (widget.results.isEmpty) {
       return const Center(
-        child: Text(
-          '暂无结果',
-          style: TextStyle(color: Color(0xFFFF6B9D)),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.auto_awesome, size: 48, color: Color(0xFFFF6B9D)),
+            SizedBox(height: 12),
+            Text(
+              '正在生成精彩内容...',
+              style: TextStyle(color: Color(0xFFFF6B9D)),
+            ),
+          ],
         ),
       );
     }
     
     return SizedBox(
-      height: 320,
+      height: 340,
       child: PageView.builder(
         controller: _pageController,
         itemCount: widget.results.length,
@@ -78,6 +85,7 @@ class _ContinuationResultCardsState extends State<ContinuationResultCards> {
               content: widget.results[index].content,
               isNew: widget.results[index].isNew,
               isSelected: index == widget.selectedIndex,
+              index: index,
               onTap: () => widget.onSelect?.call(index),
             ),
           );

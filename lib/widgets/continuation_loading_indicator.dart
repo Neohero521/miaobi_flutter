@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
-/// 半圆弧/空心环形加载动画
+/// 半圆弧/空心环形加载动画 + 打字机效果
 class ContinuationLoadingIndicator extends StatefulWidget {
   final double size;
   final Color arcColor;
@@ -193,5 +193,135 @@ class _SemiArcPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _SemiArcPainter oldDelegate) {
     return oldDelegate.progress != progress;
+  }
+}
+
+/// 打字机效果加载动画 - 显示文字逐字出现
+class TypingLoadingIndicator extends StatefulWidget {
+  final String text;
+  final TextStyle? textStyle;
+  final Color cursorColor;
+  
+  const TypingLoadingIndicator({
+    super.key,
+    this.text = '正在构思中',
+    this.textStyle,
+    this.cursorColor = const Color(0xFFFF6B9D),
+  });
+  
+  @override
+  State<TypingLoadingIndicator> createState() => _TypingLoadingIndicatorState();
+}
+
+class _TypingLoadingIndicatorState extends State<TypingLoadingIndicator>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  final List<String> _loadingTexts = [
+    '正在构思中',
+    '正在写作中',
+    '正在整理中',
+    '快完成了',
+  ];
+  int _currentTextIndex = 0;
+  
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 2000),
+      vsync: this,
+    )..repeat();
+    
+    _controller.addListener(() {
+      if (_controller.value >= 0.75 && _currentTextIndex < _loadingTexts.length - 1) {
+        setState(() => _currentTextIndex++);
+      }
+    });
+  }
+  
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(
+          width: 16,
+          height: 16,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor: AlwaysStoppedAnimation(Color(0xFFFF6B9D)),
+          ),
+        ),
+        const SizedBox(width: 12),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          child: Text(
+            _loadingTexts[_currentTextIndex],
+            key: ValueKey(_currentTextIndex),
+            style: widget.textStyle ?? const TextStyle(
+              fontSize: 14,
+              color: Color(0xFFFF6B9D),
+            ),
+          ),
+        ),
+        const SizedBox(width: 2),
+        _TypingCursor(color: widget.cursorColor),
+      ],
+    );
+  }
+}
+
+class _TypingCursor extends StatefulWidget {
+  final Color color;
+  
+  const _TypingCursor({required this.color});
+  
+  @override
+  State<_TypingCursor> createState() => _TypingCursorState();
+}
+
+class _TypingCursorState extends State<_TypingCursor>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 500),
+      vsync: this,
+    )..repeat(reverse: true);
+  }
+  
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Opacity(
+          opacity: _controller.value,
+          child: Text(
+            '|',
+            style: TextStyle(
+              fontSize: 14,
+              color: widget.color,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        );
+      },
+    );
   }
 }

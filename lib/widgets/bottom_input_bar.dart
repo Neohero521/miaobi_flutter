@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import '../theme/app_theme.dart';
 import '../models/models.dart';
 
 enum AiMenuAction { expand, shrink, rewrite, directedContinuation }
@@ -18,6 +17,8 @@ class BottomInputBar extends StatefulWidget {
   final VoidCallback onShrink;
   final VoidCallback onRewrite;
   final VoidCallback onDirectedContinuation;
+  final int selectedLength;
+  final ValueChanged<int> onLengthSelected;
 
   const BottomInputBar({
     super.key,
@@ -33,6 +34,8 @@ class BottomInputBar extends StatefulWidget {
     required this.onShrink,
     required this.onRewrite,
     required this.onDirectedContinuation,
+    required this.selectedLength,
+    required this.onLengthSelected,
   });
 
   @override
@@ -91,6 +94,8 @@ class _BottomInputBarState extends State<BottomInputBar> {
               onShrink: () { _removeStarOverlay(); widget.onShrink(); },
               onRewrite: () { _removeStarOverlay(); widget.onRewrite(); },
               onDirectedContinuation: () { _removeStarOverlay(); widget.onDirectedContinuation(); },
+              selectedLength: widget.selectedLength,
+              onLengthSelected: widget.onLengthSelected,
             ),
           ),
         ],
@@ -475,12 +480,16 @@ class _StarFunctionPanel extends StatelessWidget {
   final VoidCallback onShrink;
   final VoidCallback onRewrite;
   final VoidCallback onDirectedContinuation;
+  final int selectedLength;
+  final ValueChanged<int> onLengthSelected;
 
   const _StarFunctionPanel({
     required this.onExpand,
     required this.onShrink,
     required this.onRewrite,
     required this.onDirectedContinuation,
+    required this.selectedLength,
+    required this.onLengthSelected,
   });
 
   @override
@@ -529,6 +538,12 @@ class _StarFunctionPanel extends StatelessWidget {
             icon: Icons.auto_awesome,
             label: '定向续写',
             onTap: onDirectedContinuation,
+          ),
+          Container(height: 1, color: Color(0xFFF0F0F0), margin: EdgeInsets.symmetric(horizontal: 16)),
+          // 续写长度选择
+          _LengthSelector(
+            selectedLength: selectedLength,
+            onLengthSelected: onLengthSelected,
           ),
           const SizedBox(height: 8),
           // 底部示例提示行
@@ -623,6 +638,86 @@ class _VerticalFunctionItem extends StatelessWidget {
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// 续写长度选择器
+class _LengthSelector extends StatelessWidget {
+  final int selectedLength;
+  final ValueChanged<int> onLengthSelected;
+
+  const _LengthSelector({
+    required this.selectedLength,
+    required this.onLengthSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          const Icon(Icons.straighten, size: 18, color: Color(0xFF666666)),
+          const SizedBox(width: 8),
+          const Text(
+            '续写长度',
+            style: TextStyle(fontSize: 14, color: Color(0xFF333333)),
+          ),
+          const SizedBox(width: 12),
+          _LengthChip(
+            label: '短',
+            isSelected: selectedLength == 0,
+            onTap: () => onLengthSelected(0),
+          ),
+          const SizedBox(width: 8),
+          _LengthChip(
+            label: '中',
+            isSelected: selectedLength == 1,
+            onTap: () => onLengthSelected(1),
+          ),
+          const SizedBox(width: 8),
+          _LengthChip(
+            label: '长',
+            isSelected: selectedLength == 2,
+            onTap: () => onLengthSelected(2),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LengthChip extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _LengthChip({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFFF6B6B) : Colors.grey.shade200,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: isSelected ? Colors.white : Colors.grey.shade600,
+          ),
         ),
       ),
     );
