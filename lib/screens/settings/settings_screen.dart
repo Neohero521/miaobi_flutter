@@ -453,6 +453,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
           
           const SizedBox(height: 16),
           
+          // 自动续写设置
+          _buildSectionCard(
+            title: '⚡ 自动续写',
+            icon: Icons.auto_awesome,
+            children: [
+              _buildAutoContinueSettings(),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+          
           // 续写设置
           _buildSectionCard(
             title: '✏️ 续写设置',
@@ -543,6 +554,114 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildAutoContinueSettings() {
+    return Consumer<WritingProvider>(
+      builder: (context, provider, _) {
+        final state = provider.state;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 开关
+            Row(
+              children: [
+                const Text(
+                  '开启自动续写',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.ink,
+                  ),
+                ),
+                const Spacer(),
+                Switch(
+                  value: state.autoContinueEnabled,
+                  onChanged: (v) => provider.setAutoContinue(v),
+                  activeColor: AppColors.caiyunPrimary,
+                ),
+              ],
+            ),
+
+            if (state.autoContinueEnabled) ...[
+              const SizedBox(height: 4),
+              Text(
+                '当文章字数达到阈值时，自动触发一次续写请求',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+              ),
+
+              const SizedBox(height: 16),
+              const Text(
+                '触发阈值',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.ink,
+                ),
+              ),
+              const SizedBox(height: 8),
+              // 阈值选择（复用 continuationLength 映射）
+              Row(
+                children: [
+                  _ThresholdOption(
+                    label: '300字',
+                    isSelected: state.continuationLength == 0,
+                    onTap: () => provider.setContinuationLength(0),
+                  ),
+                  const SizedBox(width: 10),
+                  _ThresholdOption(
+                    label: '500字',
+                    isSelected: state.continuationLength == 1,
+                    onTap: () => provider.setContinuationLength(1),
+                  ),
+                  const SizedBox(width: 10),
+                  _ThresholdOption(
+                    label: '800字',
+                    isSelected: state.continuationLength == 2,
+                    onTap: () => provider.setContinuationLength(2),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 16),
+              const Text(
+                '续写模式',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.ink,
+                ),
+              ),
+              const SizedBox(height: 8),
+              // 模式选择
+              Row(
+                children: [
+                  Expanded(
+                    child: _ModeOption(
+                      icon: '💬',
+                      label: '显式模式',
+                      desc: '弹出气泡卡片',
+                      isSelected: state.autoContinueMode == 'explicit',
+                      onTap: () => provider.setAutoContinueMode('explicit'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _ModeOption(
+                      icon: '🤫',
+                      label: '静默模式',
+                      desc: '直接追加内容',
+                      isSelected: state.autoContinueMode == 'silent',
+                      onTap: () => provider.setAutoContinueMode('silent'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        );
+      },
     );
   }
 
@@ -737,6 +856,112 @@ class _LengthOption extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// 阈值选择项
+class _ThresholdOption extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _ThresholdOption({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? AppColors.caiyunPrimary.withOpacity(0.15)
+                : AppColors.typewriterCream,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected ? AppColors.caiyunPrimary : Colors.grey.shade300,
+              width: isSelected ? 2 : 1,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: isSelected ? AppColors.caiyunPrimary : AppColors.ink,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// 模式选择项
+class _ModeOption extends StatelessWidget {
+  final String icon;
+  final String label;
+  final String desc;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _ModeOption({
+    required this.icon,
+    required this.label,
+    required this.desc,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.caiyunPrimary.withOpacity(0.1)
+              : AppColors.typewriterCream,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? AppColors.caiyunPrimary : Colors.grey.shade300,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(icon, style: const TextStyle(fontSize: 16)),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: isSelected ? AppColors.caiyunPrimary : AppColors.ink,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              desc,
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+            ),
+          ],
         ),
       ),
     );

@@ -13,6 +13,7 @@ import '../../widgets/character_sheet.dart';
 import '../../widgets/world_setting_sheet.dart';
 import '../../widgets/history_sheet.dart';
 import '../../widgets/continuation_result_cards.dart';
+import '../../widgets/auto_continuation_bubble.dart';
 import '../settings/settings_screen.dart';
 
 class WritingScreen extends StatefulWidget {
@@ -36,6 +37,11 @@ class _WritingScreenState extends State<WritingScreen> {
   List<ContinuationResultItem> _oneLineResults = [];
   int _oneLineSelectedIndex = -1;
   bool _oneLineGenerating = false;
+
+  // 自动续写相关状态
+  int _lastHandledTriggerCount = 0;
+  bool _isAutoGenerating = false;
+  String? _autoContinuePendingContent; // 显式模式等待用户决策的续写内容
 
   static const String _browserUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
@@ -65,7 +71,18 @@ class _WritingScreenState extends State<WritingScreen> {
 
   void _onContentChanged() {
     final provider = context.read<WritingProvider>();
+    final prevTriggerCount = provider.state.autoContinueTriggerCount;
     provider.setContent(_contentController.text);
+    final newTriggerCount = provider.state.autoContinueTriggerCount;
+    // 检测自动续写触发
+    if (newTriggerCount > prevTriggerCount &&
+        newTriggerCount > _lastHandledTriggerCount &&
+        !_isAutoGenerating &&
+        !provider.state.isGenerating &&
+        !_showContinuationOptions) {
+      _lastHandledTriggerCount = newTriggerCount;
+      _runAutoContinue(provider);
+    }
   }
 
   @override
@@ -84,6 +101,75 @@ class _WritingScreenState extends State<WritingScreen> {
         backgroundColor: const Color(0xFFFF6B9D),
       ),
     );
+  }
+
+  /// 自动续写入口
+  void _runAutoContinue(WritingProvider provider) async {
+    final state = provider.state;
+    if (state.apiKey.isEmpty || state.apiUrl.isEmpty) return;
+    if (state.selectedModel.isEmpty || state.selectedModel == 'auto') return;
+    if (state.content.length < 20) return;
+
+    setState(() => _isAutoGenerating = true);
+
+    try {
+      final systemPrompt =
+          '你是一位专业的小说续写作者。\n'
+          '请根据上文自然流畅地续写 150-300 字。\n'
+          '要求：\n'
+          '1. 保持原文风格、语调、叙事节奏\n'
+          '2. 情节发展自然合理\n'
+          '3. 只输出续写内容，不加任何前缀说明';
+
+      final messages = [
+        {'role': 'system', 'content': systemPrompt},
+        {'role': 'user', 'content': state.content},
+      ];
+
+      final apiUrl = _buildApiUrl(state.apiUrl);
+      final response = await http.post(
+        Uri.parse(apiUrl),
+        headers: _buildHeaders(state.apiKey),
+        body: json.encode({
+          'model': state.selectedModel,
+          'messages': messages,
+          'temperature': 0.85,
+          'max_tokens': 2048,
+          'n': 1,
+        }),
+      ).timeout(const Duration(seconds: 90));
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        final data = json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        final result = data['choices']?[0]?['message']?['content']?.toString() ?? '';
+        if (result.isEmpty) throw Exception('自动续写返回内容为空');
+
+        final generated = result.trim();
+        final mode = provider.state.autoContinueMode;
+
+        if (mode == 'silent') {
+          // 静默模式：直接追加到内容
+          final newContent = provider.state.content + generated;
+          _contentController.text = newContent;
+          provider.setContent(newContent);
+        } else {
+          // 显式模式：弹出气泡卡片
+          setState(() {
+            _autoContinuePendingContent = generated;
+          });
+        }
+      } else {
+        throw Exception('API错误 ${response.statusCode}');
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnackBar('自动续写失败: $e');
+      }
+    } finally {
+      if (mounted) setState(() => _isAutoGenerating = false);
+    }
   }
 
   void _onGenerate() async {
@@ -756,6 +842,61 @@ $directionDesc
             ),
           ),
         ),
+
+        // 自动续写清正在生成的指示
+        if (_isAutoGenerating)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+            child: Row(
+              children: [
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6B9D)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '自动续写生成中…',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: const Color(0xFFFF6B9D).withOpacity(0.8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+        // 自动续写气泡卡片（显式模式）
+        if (_autoContinuePendingContent != null)
+          AutoContinuationBubble(
+            generatedContent: _autoContinuePendingContent!,
+            onAccept: () {
+              final newContent = _contentController.text + _autoContinuePendingContent!;
+              _contentController.text = newContent;
+              context.read<WritingProvider>().setContent(newContent);
+              setState(() => _autoContinuePendingContent = null);
+            },
+            onDismiss: () => setState(() => _autoContinuePendingContent = null),
+            onModify: () {
+              // 将续写内容推入续写结果选择界面
+              final provider = context.read<WritingProvider>();
+              provider.setOriginalContent(provider.state.content);
+              provider.setContinuationResults([
+                ContinuationResultItem(
+                  content: _autoContinuePendingContent!,
+                  isNew: true,
+                ),
+              ]);
+              provider.setCurrentResultIndex(0);
+              setState(() {
+                _autoContinuePendingContent = null;
+                _showContinuationOptions = true;
+              });
+            },
+          ),
         
         // 字数统计
         Consumer<WritingProvider>(

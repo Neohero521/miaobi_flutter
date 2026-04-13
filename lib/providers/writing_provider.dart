@@ -55,8 +55,13 @@ class WritingState {
   final int currentResultIndex;
   final String? lastGeneratedContent;
   
-  // 续写前保留的原文（用于显示"原文"区域，避免 content 被续写内容污染后重复显示）
+  // 续写前保留的原文
   final String? originalContent;
+
+  // 自动续写模式: 'explicit'(气泡卡片) | 'silent'(静默追加)
+  final String autoContinueMode;
+  // 每次阈值触发时自增，通知 UI 层
+  final int autoContinueTriggerCount;
   
   WritingState({
     this.content = '',
@@ -86,6 +91,8 @@ class WritingState {
     this.currentResultIndex = 0,
     this.lastGeneratedContent,
     this.originalContent,
+    this.autoContinueMode = 'explicit',
+    this.autoContinueTriggerCount = 0,
   });
   
   bool get canUndo => undoStack.isNotEmpty;
@@ -119,6 +126,8 @@ class WritingState {
     int? currentResultIndex,
     String? lastGeneratedContent,
     String? originalContent,
+    String? autoContinueMode,
+    int? autoContinueTriggerCount,
   }) {
     return WritingState(
       content: content ?? this.content,
@@ -148,6 +157,8 @@ class WritingState {
       currentResultIndex: currentResultIndex ?? this.currentResultIndex,
       lastGeneratedContent: lastGeneratedContent ?? this.lastGeneratedContent,
       originalContent: originalContent ?? this.originalContent,
+      autoContinueMode: autoContinueMode ?? this.autoContinueMode,
+      autoContinueTriggerCount: autoContinueTriggerCount ?? this.autoContinueTriggerCount,
     );
   }
 }
@@ -163,7 +174,11 @@ class WritingProvider extends ChangeNotifier {
   static const String _apiKeyKey = 'writing_api_key';
   static const String _apiUrlKey = 'writing_api_url';
   static const String _continuationLengthKey = 'writing_continuation_length';
-  
+  static const String _autoContinueModeKey = 'writing_auto_continue_mode';
+
+  // Track previous word count for threshold crossing detection
+  int _prevWordCountForAutoTrigger = 0;
+
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     final content = prefs.getString(_contentKey) ?? '';
@@ -171,6 +186,7 @@ class WritingProvider extends ChangeNotifier {
     final apiKey = prefs.getString(_apiKeyKey) ?? '';
     final apiUrl = prefs.getString(_apiUrlKey) ?? 'https://api.minimax.chat/v1';
     final continuationLength = prefs.getInt(_continuationLengthKey) ?? 1;
+    final autoContinueMode = prefs.getString(_autoContinueModeKey) ?? 'explicit';
     
     _state = _state.copyWith(
       content: content,
@@ -179,7 +195,9 @@ class WritingProvider extends ChangeNotifier {
       apiUrl: apiUrl,
       continuationLength: continuationLength,
       wordCount: _calculateWordCount(content),
+      autoContinueMode: autoContinueMode,
     );
+    _prevWordCountForAutoTrigger = _state.wordCount;
     notifyListeners();
   }
   
@@ -190,9 +208,11 @@ class WritingProvider extends ChangeNotifier {
     await prefs.setString(_apiKeyKey, _state.apiKey);
     await prefs.setString(_apiUrlKey, _state.apiUrl);
     await prefs.setInt(_continuationLengthKey, _state.continuationLength);
+    await prefs.setString(_autoContinueModeKey, _state.autoContinueMode);
   }
   
   void setContent(String content, {bool saveToHistory = true}) {
+    final previousWordCount = _state.wordCount;
     if (content != _state.content) {
       if (saveToHistory) {
         _saveToHistory();
@@ -208,8 +228,28 @@ class WritingProvider extends ChangeNotifier {
       wordCount: _calculateWordCount(content),
       redoStack: [], // 清空重做栈
     );
+    _checkAndTriggerAutoContinue(previousWordCount);
     _save();
     notifyListeners();
+  }
+
+  /// 检测是否需要触发自动续写（仅在字数上穿阈值时触发一次）
+  void _checkAndTriggerAutoContinue(int previousWordCount) {
+    if (!_state.autoContinueEnabled) return;
+    if (_state.content.length < 20) return;
+
+    // 阈值映射：continuationLength 0→300字, 1→500字, 2→800字
+    const thresholds = [300, 500, 800];
+    final threshold = thresholds[_state.continuationLength.clamp(0, 2)];
+    final current = _state.wordCount;
+
+    // 仅在从低于阈值到达到或超过阈值时触发（上穿检测）
+    if (current >= threshold && previousWordCount < threshold) {
+      _state = _state.copyWith(
+        autoContinueTriggerCount: _state.autoContinueTriggerCount + 1,
+      );
+    }
+    _prevWordCountForAutoTrigger = current;
   }
   
   void _saveToHistory() {
@@ -282,6 +322,12 @@ class WritingProvider extends ChangeNotifier {
 
   void setAutoContinue(bool enabled) {
     _state = _state.copyWith(autoContinueEnabled: enabled);
+    notifyListeners();
+  }
+
+  void setAutoContinueMode(String mode) {
+    _state = _state.copyWith(autoContinueMode: mode);
+    _save();
     notifyListeners();
   }
   
