@@ -44,6 +44,12 @@ class _WritingScreenState extends State<WritingScreen> {
   bool _isAutoGenerating = false;
   String? _autoContinuePendingContent; // 显式模式等待用户决策的续写内容
 
+  // 文字选择工具栏状态
+  bool _showSelectionToolbar = false;
+  String _selectedText = '';
+  int _selectionStart = 0;
+  int _selectionEnd = 0;
+
   static const String _browserUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
   @override
@@ -71,6 +77,20 @@ class _WritingScreenState extends State<WritingScreen> {
   }
 
   void _onContentChanged() {
+    // 检测选择状态
+    final selection = _contentController.selection;
+    final hasSelection = selection.isValid && !selection.isCollapsed && selection.end <= _contentController.text.length;
+    final selectedText = hasSelection ? _contentController.text.substring(selection.start, selection.end) : '';
+    
+    if (hasSelection != _showSelectionToolbar || (hasSelection && selectedText != _selectedText)) {
+      setState(() {
+        _showSelectionToolbar = hasSelection;
+        _selectedText = selectedText;
+        _selectionStart = selection.start;
+        _selectionEnd = selection.end;
+      });
+    }
+    
     final provider = context.read<WritingProvider>();
     final prevTriggerCount = provider.state.autoContinueTriggerCount;
     provider.setContent(_contentController.text);
@@ -1135,30 +1155,12 @@ $directionDesc
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.zero,
               ),
-              // 禁用原生工具栏，用自定义工具栏替代
-              contextMenuBuilder: (context, editableTextState) {
-                final selection = editableTextState.textEditingValue.selection;
-                final text = editableTextState.textEditingValue.text;
-                final selectedText = selection.isValid && !selection.isCollapsed
-                    ? text.substring(selection.start, selection.end) : '';
-                return SelectionActionToolbar(
-                  selectedText: selectedText,
-                  controller: _contentController,
-                  onExpand: () => _onExpandSelectedWithText(selectedText, selection),
-                  onShrink: () => _onShrinkSelectedWithText(selectedText, selection),
-                  onRewrite: () => _onRewriteSelectedWithText(selectedText, selection),
-                  onDirectedContinuation: () => _onDirectedContinuationSelectedWithText(selectedText, selection),
-                  onDismiss: () {
-                    // 取消选择
-                    _contentController.selection = TextSelection.collapsed(
-                      offset: selection.baseOffset,
-                    );
-                  },
-                );
-              },
             ),
           ),
         ),
+        
+        // 自定义选择工具栏（浮动在选择区域上方）
+        _buildSelectionToolbar(),
 
         // 自动续写清正在生成的指示
         if (_isAutoGenerating)
@@ -1880,6 +1882,35 @@ $directionDesc
   Widget _buildWorldCreation() {
     return const Center(
       child: Text('创造世界模式', style: TextStyle(fontSize: 16)),
+    );
+  }
+
+  /// 构建文字选择工具栏
+  Widget _buildSelectionToolbar() {
+    if (!_showSelectionToolbar || _selectedText.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    
+    return Positioned(
+      bottom: 120, // 在底部工具栏上方
+      left: 16,
+      right: 16,
+      child: Center(
+        child: SelectionActionToolbar(
+          selectedText: _selectedText,
+          controller: _contentController,
+          onExpand: () => _onExpandSelectedWithText(_selectedText, TextSelection(baseOffset: _selectionStart, extentOffset: _selectionEnd)),
+          onShrink: () => _onShrinkSelectedWithText(_selectedText, TextSelection(baseOffset: _selectionStart, extentOffset: _selectionEnd)),
+          onRewrite: () => _onRewriteSelectedWithText(_selectedText, TextSelection(baseOffset: _selectionStart, extentOffset: _selectionEnd)),
+          onDirectedContinuation: () => _onDirectedContinuationSelectedWithText(_selectedText, TextSelection(baseOffset: _selectionStart, extentOffset: _selectionEnd)),
+          onDismiss: () {
+            setState(() {
+              _showSelectionToolbar = false;
+              _selectedText = '';
+            });
+          },
+        ),
+      ),
     );
   }
 
