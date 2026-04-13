@@ -87,6 +87,7 @@ class _ContinuationResultCardsState extends State<ContinuationResultCards> {
               isSelected: index == widget.selectedIndex,
               index: index,
               onTap: () => widget.onSelect?.call(index),
+              onInsert: widget.onInsert != null ? () => widget.onInsert!(index) : null,
             ),
           );
         },

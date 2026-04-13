@@ -9,6 +9,7 @@ class ContinuationResultCard extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onCopy;
   final VoidCallback? onPreview;
+  final VoidCallback? onInsert;
   final int? index;
   
   const ContinuationResultCard({
@@ -19,6 +20,7 @@ class ContinuationResultCard extends StatelessWidget {
     this.onTap,
     this.onCopy,
     this.onPreview,
+    this.onInsert,
     this.index,
   });
   
@@ -129,6 +131,35 @@ class ContinuationResultCard extends StatelessWidget {
                         label: '预览',
                         onTap: onPreview,
                       ),
+                      const Spacer(),
+                      if (onInsert != null)
+                        GestureDetector(
+                          onTap: onInsert,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFFFF6B9D), Color(0xFFFF3B3B)],
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.check_circle_outline, size: 14, color: Colors.white),
+                                SizedBox(width: 4),
+                                Text(
+                                  '采纳',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ],
