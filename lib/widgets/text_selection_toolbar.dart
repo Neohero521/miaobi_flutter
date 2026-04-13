@@ -8,12 +8,14 @@ class CustomTextSelectionControls extends MaterialTextSelectionControls {
   final SelectionMenuAction onExpand;
   final SelectionMenuAction onShrink;
   final SelectionMenuAction onRewrite;
+  final SelectionMenuAction onCustom;
   final SelectionMenuAction onContinueWrite;
 
   CustomTextSelectionControls({
     required this.onExpand,
     required this.onShrink,
     required this.onRewrite,
+    required this.onCustom,
     required this.onContinueWrite,
   });
 
@@ -62,10 +64,11 @@ class CustomTextSelectionControls extends MaterialTextSelectionControls {
           onCopy: hasValidSelection ? () => _doCopy(editingValue, delegate) : null,
           onPaste: () => _doPaste(delegate),
           onSelectAll: () => delegate.selectAll(SelectionChangedCause.toolbar),
-          onExpand: hasValidSelection ? () => onExpand(editingValue, delegate) : null,
-          onShrink: hasValidSelection ? () => onShrink(editingValue, delegate) : null,
-          onRewrite: hasValidSelection ? () => onRewrite(editingValue, delegate) : null,
-          onContinueWrite: hasValidSelection ? () => onContinueWrite(editingValue, delegate) : null,
+          onExpand: hasValidSelection ? () { onExpand(editingValue, delegate); delegate.hideToolbar(); } : null,
+          onShrink: hasValidSelection ? () { onShrink(editingValue, delegate); delegate.hideToolbar(); } : null,
+          onRewrite: hasValidSelection ? () { onRewrite(editingValue, delegate); delegate.hideToolbar(); } : null,
+          onCustom: hasValidSelection ? () { onCustom(editingValue, delegate); delegate.hideToolbar(); } : null,
+          onContinueWrite: hasValidSelection ? () { onContinueWrite(editingValue, delegate); delegate.hideToolbar(); } : null,
         ),
       ),
     );
@@ -129,6 +132,7 @@ class CustomSelectionToolbar extends StatelessWidget {
   final VoidCallback? onExpand;
   final VoidCallback? onShrink;
   final VoidCallback? onRewrite;
+  final VoidCallback? onCustom;
   final VoidCallback? onContinueWrite;
 
   const CustomSelectionToolbar({
@@ -143,6 +147,7 @@ class CustomSelectionToolbar extends StatelessWidget {
     required this.onExpand,
     required this.onShrink,
     required this.onRewrite,
+    required this.onCustom,
     required this.onContinueWrite,
   });
 
@@ -180,6 +185,7 @@ class CustomSelectionToolbar extends StatelessWidget {
             children: [
               _buildButton(icon: Icons.compress, label: '缩写', onTap: onShrink),
               _buildButton(icon: Icons.edit, label: '改写', onTap: onRewrite),
+              _buildButton(icon: Icons.tune, label: '自定义', onTap: onCustom),
               _buildButton(icon: Icons.arrow_forward, label: '定向续写', onTap: onContinueWrite),
             ],
           ),
