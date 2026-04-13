@@ -1,39 +1,127 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class SelectionActionToolbar extends StatelessWidget {
   final String selectedText;
-  final VoidCallback onRewrite;
+  final TextEditingController controller;
   final VoidCallback onExpand;
   final VoidCallback onShrink;
-  final VoidCallback onDelete;
+  final VoidCallback onRewrite;
+  final VoidCallback onDirectedContinuation;
   final VoidCallback onDismiss;
 
   const SelectionActionToolbar({
     super.key,
     required this.selectedText,
-    required this.onRewrite,
+    required this.controller,
     required this.onExpand,
     required this.onShrink,
-    required this.onDelete,
+    required this.onRewrite,
+    required this.onDirectedContinuation,
     required this.onDismiss,
   });
 
+  void _copy() {
+    Clipboard.setData(ClipboardData(text: selectedText));
+    onDismiss();
+  }
+
+  void _cut() {
+    Clipboard.setData(ClipboardData(text: selectedText));
+    final text = controller.text;
+    final selection = controller.selection;
+    if (selection.isValid && !selection.isCollapsed) {
+      final newText = text.replaceRange(selection.start, selection.end, '');
+      controller.text = newText;
+      controller.selection = TextSelection.collapsed(offset: selection.start);
+    }
+    onDismiss();
+  }
+
+  void _paste() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (data?.text != null) {
+      final text = controller.text;
+      final selection = controller.selection;
+      if (selection.isValid) {
+        final newText = text.replaceRange(selection.start, selection.end, data!.text!);
+        controller.text = newText;
+        controller.selection = TextSelection.collapsed(offset: selection.start + data!.text!.length);
+      }
+    }
+    onDismiss();
+  }
+
+  void _selectAll() {
+    controller.selection = TextSelection(baseOffset: 0, extentOffset: controller.text.length);
+    onDismiss();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final hasSelection = selectedText.isNotEmpty;
+    
     return Material(
       elevation: 8,
       borderRadius: BorderRadius.circular(12),
       color: Colors.white,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _ToolButton(icon: Icons.edit, label: '改写', emoji: '✎', onTap: onRewrite),
-            _ToolButton(icon: Icons.open_in_full, label: '扩写', emoji: '↗', onTap: onExpand),
-            _ToolButton(icon: Icons.short_text, label: '缩写', emoji: '↘', onTap: onShrink),
-            _ToolButton(icon: Icons.delete, label: '删除', emoji: '🗑', onTap: onDelete, isDestructive: true),
-            const VerticalDivider(width: 16),
+            // 标准操作
+            _ToolButton(
+              icon: Icons.content_cut,
+              label: '剪切',
+              emoji: '✂️',
+              onTap: hasSelection ? _cut : null,
+            ),
+            _ToolButton(
+              icon: Icons.content_copy,
+              label: '复制',
+              emoji: '📋',
+              onTap: hasSelection ? _copy : null,
+            ),
+            _ToolButton(
+              icon: Icons.content_paste,
+              label: '粘贴',
+              emoji: '📝',
+              onTap: _paste,
+            ),
+            _ToolButton(
+              icon: Icons.select_all,
+              label: '全选',
+              emoji: '✅',
+              onTap: _selectAll,
+            ),
+            const VerticalDivider(width: 12),
+            // AI 操作
+            _ToolButton(
+              icon: Icons.open_in_full,
+              label: '扩写',
+              emoji: '🔺',
+              onTap: hasSelection ? onExpand : null,
+            ),
+            _ToolButton(
+              icon: Icons.short_text,
+              label: '缩写',
+              emoji: '🔻',
+              onTap: hasSelection ? onShrink : null,
+            ),
+            _ToolButton(
+              icon: Icons.edit,
+              label: '改写',
+              emoji: '✏️',
+              onTap: hasSelection ? onRewrite : null,
+            ),
+            _ToolButton(
+              icon: Icons.arrow_forward,
+              label: '定向',
+              emoji: '🎯',
+              onTap: hasSelection ? onDirectedContinuation : null,
+            ),
+            const VerticalDivider(width: 8),
             IconButton(
               icon: const Icon(Icons.close, size: 18),
               onPressed: onDismiss,
@@ -50,25 +138,24 @@ class _ToolButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final String emoji;
-  final VoidCallback onTap;
-  final bool isDestructive;
+  final VoidCallback? onTap;
 
   const _ToolButton({
     required this.icon,
     required this.label,
     required this.emoji,
-    required this.onTap,
-    this.isDestructive = false,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final enabled = onTap != null;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        constraints: const BoxConstraints(minWidth: 56, minHeight: 48),
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+        constraints: const BoxConstraints(minWidth: 52, minHeight: 52),
+        padding: const EdgeInsets.symmetric(horizontal: 4),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -78,7 +165,7 @@ class _ToolButton extends StatelessWidget {
               label,
               style: TextStyle(
                 fontSize: 10,
-                color: isDestructive ? Colors.red : Colors.black87,
+                color: enabled ? Colors.black87 : Colors.grey.shade400,
               ),
             ),
           ],

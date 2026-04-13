@@ -13,6 +13,7 @@ import '../../widgets/character_sheet.dart';
 import '../../widgets/world_setting_sheet.dart';
 import '../../widgets/history_sheet.dart';
 import '../../widgets/continuation_result_cards.dart';
+import '../../widgets/text_selection_toolbar.dart';
 import '../../widgets/auto_continuation_bubble.dart';
 import '../settings/settings_screen.dart';
 
@@ -37,6 +38,10 @@ class _WritingScreenState extends State<WritingScreen> {
   List<ContinuationResultItem> _oneLineResults = [];
   int _oneLineSelectedIndex = -1;
   bool _oneLineGenerating = false;
+
+  // 文字选择工具栏状态
+  bool _showSelectionToolbar = false;
+  String _selectedText = '';
 
   // 自动续写相关状态
   int _lastHandledTriggerCount = 0;
@@ -70,6 +75,22 @@ class _WritingScreenState extends State<WritingScreen> {
   }
 
   void _onContentChanged() {
+    // 检测选择状态
+    final selection = _contentController.selection;
+    final hasSelection = selection.isValid && !selection.isCollapsed && selection.end <= _contentController.text.length;
+    final selectedText = hasSelection ? _contentController.text.substring(selection.start, selection.end) : '';
+    
+    if (hasSelection != _showSelectionToolbar || (hasSelection && selectedText != _selectedText)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _showSelectionToolbar = hasSelection;
+            _selectedText = selectedText;
+          });
+        }
+      });
+    }
+    
     final provider = context.read<WritingProvider>();
     final prevTriggerCount = provider.state.autoContinueTriggerCount;
     provider.setContent(_contentController.text);
@@ -101,6 +122,321 @@ class _WritingScreenState extends State<WritingScreen> {
         backgroundColor: const Color(0xFFFF6B9D),
       ),
     );
+  }
+
+  /// 选中文字扩写
+  void _onExpandSelected() async {
+    final selection = _contentController.selection;
+    if (!selection.isValid || selection.isCollapsed) return;
+    final selectedText = _contentController.text.substring(selection.start, selection.end);
+    if (selectedText.length < 10) {
+      _showSnackBar('选中的文字太少了，至少10个字~');
+      return;
+    }
+    
+    final provider = context.read<WritingProvider>();
+    if (provider.state.apiKey.isEmpty || provider.state.apiUrl.isEmpty) {
+      _showSnackBar('请先配置API');
+      return;
+    }
+    if (provider.state.selectedModel.isEmpty || provider.state.selectedModel == 'auto') {
+      _showSnackBar('请先选择一个模型');
+      return;
+    }
+    
+    setState(() => _isGenerating = true);
+    
+    try {
+      final systemPrompt = '''你是一位专业的小说扩写作者，擅长将简短的内容扩展为丰富生动的描写。
+
+扩写要求：
+1. 保持原文的核心情节和关键信息不变
+2. 增加细节描写，让场景更生动立体
+3. 适当增加人物心理描写
+4. 扩写长度约为原文的2-3倍
+5. 只输出扩写后的内容，不要加任何前缀说明''';
+
+      final messages = [
+        {'role': 'system', 'content': systemPrompt},
+        {'role': 'user', 'content': selectedText},
+      ];
+
+      final apiUrl = _buildApiUrl(provider.state.apiUrl);
+      
+      final response = await http.post(
+        Uri.parse(apiUrl),
+        headers: _buildHeaders(provider.state.apiKey),
+        body: json.encode({
+          'model': provider.state.selectedModel,
+          'messages': messages,
+          'temperature': 0.8,
+          'max_tokens': 16384,
+          'n': 1,
+        }),
+      ).timeout(const Duration(seconds: 120));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        final result = data['choices']?[0]?['message']?['content'] ?? '';
+        if (result.isEmpty) throw Exception('扩写返回内容为空');
+        
+        // 替换选中文字
+        final text = _contentController.text;
+        final newText = text.replaceRange(selection.start, selection.end, result.trim());
+        _contentController.text = newText;
+        provider.setContent(newText);
+        
+        setState(() {
+          _showSelectionToolbar = false;
+          _isGenerating = false;
+        });
+        _showSnackBar('扩写成功~');
+      } else {
+        throw Exception('API错误 ${response.statusCode}');
+      }
+    } catch (e) {
+      setState(() => _isGenerating = false);
+      _showSnackBar('扩写失败: $e');
+    }
+  }
+
+  /// 选中文字缩写
+  void _onShrinkSelected() async {
+    final selection = _contentController.selection;
+    if (!selection.isValid || selection.isCollapsed) return;
+    final selectedText = _contentController.text.substring(selection.start, selection.end);
+    if (selectedText.length < 20) {
+      _showSnackBar('选中的文字太少了，至少20个字才能缩写~');
+      return;
+    }
+    
+    final provider = context.read<WritingProvider>();
+    if (provider.state.apiKey.isEmpty || provider.state.apiUrl.isEmpty) {
+      _showSnackBar('请先配置API');
+      return;
+    }
+    if (provider.state.selectedModel.isEmpty || provider.state.selectedModel == 'auto') {
+      _showSnackBar('请先选择一个模型');
+      return;
+    }
+    
+    setState(() => _isGenerating = true);
+    
+    try {
+      final systemPrompt = '''你是一位专业的小说缩写作者，擅长将冗长的内容精简为核心要点。
+
+缩写要求：
+1. 保留原文的核心情节和关键信息
+2. 删除冗余描写，保留精华
+3. 缩写后长度约为原文的1/3到1/2
+4. 只输出缩写后的内容，不要加任何前缀说明''';
+
+      final messages = [
+        {'role': 'system', 'content': systemPrompt},
+        {'role': 'user', 'content': selectedText},
+      ];
+
+      final apiUrl = _buildApiUrl(provider.state.apiUrl);
+      
+      final response = await http.post(
+        Uri.parse(apiUrl),
+        headers: _buildHeaders(provider.state.apiKey),
+        body: json.encode({
+          'model': provider.state.selectedModel,
+          'messages': messages,
+          'temperature': 0.7,
+          'max_tokens': 16384,
+          'n': 1,
+        }),
+      ).timeout(const Duration(seconds: 120));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        final result = data['choices']?[0]?['message']?['content'] ?? '';
+        if (result.isEmpty) throw Exception('缩写返回内容为空');
+        
+        // 替换选中文字
+        final text = _contentController.text;
+        final newText = text.replaceRange(selection.start, selection.end, result.trim());
+        _contentController.text = newText;
+        provider.setContent(newText);
+        
+        setState(() {
+          _showSelectionToolbar = false;
+          _isGenerating = false;
+        });
+        _showSnackBar('缩写成功~');
+      } else {
+        throw Exception('API错误 ${response.statusCode}');
+      }
+    } catch (e) {
+      setState(() => _isGenerating = false);
+      _showSnackBar('缩写失败: $e');
+    }
+  }
+
+  /// 选中文字改写
+  void _onRewriteSelected() async {
+    final selection = _contentController.selection;
+    if (!selection.isValid || selection.isCollapsed) return;
+    final selectedText = _contentController.text.substring(selection.start, selection.end);
+    if (selectedText.length < 10) {
+      _showSnackBar('选中的文字太少了，至少10个字~');
+      return;
+    }
+    
+    final provider = context.read<WritingProvider>();
+    if (provider.state.apiKey.isEmpty || provider.state.apiUrl.isEmpty) {
+      _showSnackBar('请先配置API');
+      return;
+    }
+    if (provider.state.selectedModel.isEmpty || provider.state.selectedModel == 'auto') {
+      _showSnackBar('请先选择一个模型');
+      return;
+    }
+    
+    setState(() => _isGenerating = true);
+    
+    try {
+      final systemPrompt = '''你是一位专业的小说改写作者，擅长用不同的词汇和句式重新表达同样的内容。
+
+改写要求：
+1. 保持原文的核心情节和关键信息完全不变
+2. 用不同的词汇、句式、描写方式重写
+3. 保持原文的风格和情感基调
+4. 只输出改写后的内容，不要加任何前缀说明''';
+
+      final messages = [
+        {'role': 'system', 'content': systemPrompt},
+        {'role': 'user', 'content': selectedText},
+      ];
+
+      final apiUrl = _buildApiUrl(provider.state.apiUrl);
+      
+      final response = await http.post(
+        Uri.parse(apiUrl),
+        headers: _buildHeaders(provider.state.apiKey),
+        body: json.encode({
+          'model': provider.state.selectedModel,
+          'messages': messages,
+          'temperature': 0.85,
+          'max_tokens': 16384,
+          'n': 1,
+        }),
+      ).timeout(const Duration(seconds: 120));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        final result = data['choices']?[0]?['message']?['content'] ?? '';
+        if (result.isEmpty) throw Exception('改写返回内容为空');
+        
+        // 替换选中文字
+        final text = _contentController.text;
+        final newText = text.replaceRange(selection.start, selection.end, result.trim());
+        _contentController.text = newText;
+        provider.setContent(newText);
+        
+        setState(() {
+          _showSelectionToolbar = false;
+          _isGenerating = false;
+        });
+        _showSnackBar('改写成功~');
+      } else {
+        throw Exception('API错误 ${response.statusCode}');
+      }
+    } catch (e) {
+      setState(() => _isGenerating = false);
+      _showSnackBar('改写失败: $e');
+    }
+  }
+
+  /// 选中文字定向续写
+  void _onDirectedContinuationSelected() async {
+    final selection = _contentController.selection;
+    if (!selection.isValid || selection.isCollapsed) return;
+    final selectedText = _contentController.text.substring(selection.start, selection.end);
+    if (selectedText.length < 10) {
+      _showSnackBar('选中的文字太少了，至少10个字~');
+      return;
+    }
+    
+    final provider = context.read<WritingProvider>();
+    if (provider.state.apiKey.isEmpty || provider.state.apiUrl.isEmpty) {
+      _showSnackBar('请先配置API');
+      return;
+    }
+    if (provider.state.selectedModel.isEmpty || provider.state.selectedModel == 'auto') {
+      _showSnackBar('请先选择一个模型');
+      return;
+    }
+    
+    // 检查是否选择了方向
+    if (provider.state.selectedDirections.isEmpty) {
+      _showSnackBar('请先选择续写方向~');
+      return;
+    }
+    
+    setState(() => _isGenerating = true);
+    
+    try {
+      final directions = provider.state.selectedDirections;
+      String directionDesc = '';
+      for (final d in directions) {
+        directionDesc += '${d.emoji} ${d.label}: ${d.description}\n';
+      }
+      
+      final systemPrompt = '''你是一位专业的小说续写作者，擅长根据指定方向进行续写。
+
+【续写方向】
+$directionDesc
+
+续写要求：
+1. 严格按照指定方向进行续写
+2. 注重该方向的描写和发展
+3. 只输出续写内容，不要加任何前缀说明''';
+
+      final messages = [
+        {'role': 'system', 'content': systemPrompt},
+        {'role': 'user', 'content': selectedText},
+      ];
+
+      final apiUrl = _buildApiUrl(provider.state.apiUrl);
+      
+      final response = await http.post(
+        Uri.parse(apiUrl),
+        headers: _buildHeaders(provider.state.apiKey),
+        body: json.encode({
+          'model': provider.state.selectedModel,
+          'messages': messages,
+          'temperature': 0.9,
+          'max_tokens': 16384,
+          'n': 1,
+        }),
+      ).timeout(const Duration(seconds: 120));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        final result = data['choices']?[0]?['message']?['content'] ?? '';
+        if (result.isEmpty) throw Exception('定向续写返回内容为空');
+        
+        // 替换选中文字
+        final text = _contentController.text;
+        final newText = text.replaceRange(selection.start, selection.end, result.trim());
+        _contentController.text = newText;
+        provider.setContent(newText);
+        
+        setState(() {
+          _showSelectionToolbar = false;
+          _isGenerating = false;
+        });
+        _showSnackBar('定向续写成功~');
+      } else {
+        throw Exception('API错误 ${response.statusCode}');
+      }
+    } catch (e) {
+      setState(() => _isGenerating = false);
+      _showSnackBar('定向续写失败: $e');
+    }
   }
 
   /// 自动续写入口
@@ -805,41 +1141,63 @@ $directionDesc
         
         // 编辑区域
         Expanded(
-          child: Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.typewriterPaper,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
+          child: Stack(
+            children: [
+              Container(
+                margin: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.typewriterPaper,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: TextField(
-              controller: _contentController,
-              focusNode: _focusNode,
-              maxLines: null,
-              expands: true,
-              textAlignVertical: TextAlignVertical.top,
-              style: const TextStyle(
-                fontSize: 16,
-                color: AppColors.ink,
-                height: 1.8,
-              ),
-              decoration: InputDecoration(
-                hintText: '在此处开始写作...',
-                hintStyle: TextStyle(
-                  color: AppColors.hint.withOpacity(0.45),
-                  fontSize: 16,
+                child: TextField(
+                  controller: _contentController,
+                  focusNode: _focusNode,
+                  maxLines: null,
+                  expands: true,
+                  textAlignVertical: TextAlignVertical.top,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: AppColors.ink,
+                    height: 1.8,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: '在此处开始写作...',
+                    hintStyle: TextStyle(
+                      color: AppColors.hint.withOpacity(0.45),
+                      fontSize: 16,
+                    ),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
+                  ),
                 ),
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.zero,
               ),
-            ),
+              // 文字选择工具栏
+              if (_showSelectionToolbar)
+                Positioned(
+                  top: 24,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: SelectionActionToolbar(
+                      selectedText: _selectedText,
+                      controller: _contentController,
+                      onExpand: _onExpandSelected,
+                      onShrink: _onShrinkSelected,
+                      onRewrite: _onRewriteSelected,
+                      onDirectedContinuation: _onDirectedContinuationSelected,
+                      onDismiss: () => setState(() => _showSelectionToolbar = false),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
 
