@@ -1,245 +1,781 @@
-import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../app/theme/app_theme.dart';
-import '../../widgets/native_selection_text_field.dart';
-import '../../widgets/text_selection_toolbar.dart';
-import '../../features/chapters/domain/entities/chapter.dart';
-import '../../features/chapters/presentation/providers/chapter_providers.dart';
+import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
+import '../../theme/app_theme.dart';
+import '../../models/models.dart';
+import '../../providers/writing_provider.dart';
+import '../../widgets/bottom_input_bar.dart';
+import '../../widgets/direction_selector.dart';
+import '../../widgets/continuation_suggestions.dart';
+import '../../widgets/multibranch_bottom_sheet.dart';
+import '../../widgets/character_sheet.dart';
+import '../../widgets/world_setting_sheet.dart';
+import '../../widgets/history_sheet.dart';
+import '../settings/settings_screen.dart';
 
-/// Writing screen that uses native text selection with AI actions.
-///
-/// This screen integrates:
-/// - [NativeSelectionTextField] for native EditText with custom selection menu
-/// - [AiSelectionToolbar] for AI-powered text operations (expand/shrink/rewrite/directed)
-class WritingScreen extends ConsumerStatefulWidget {
-  final String novelId;
-  final String chapterId;
-
-  const WritingScreen({
-    super.key,
-    required this.novelId,
-    required this.chapterId,
-  });
+class WritingScreen extends StatefulWidget {
+  const WritingScreen({super.key});
 
   @override
-  ConsumerState<WritingScreen> createState() => _WritingScreenState();
+  State<WritingScreen> createState() => _WritingScreenState();
 }
 
-class _WritingScreenState extends ConsumerState<WritingScreen> {
-  late TextEditingController _controller;
-  ChapterEntity? _chapter;
-  bool _isSaving = false;
-  bool _hasChanges = false;
-  bool _isAiLoading = false;
-  Timer? _autoSaveTimer;
+class _WritingScreenState extends State<WritingScreen> {
+  final TextEditingController _contentController = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
+  bool _showDirectionSelector = false;
+  int _currentTabIndex = 0; // 0=创作, 1=一行续写, 2=创造世界
+  List<String> _continuationOptions = []; // 续写多选项
+  bool _showContinuationOptions = false;
+  bool _isGenerating = false; // 续写进行中
 
-  final GlobalKey<NativeSelectionTextFieldState> _textFieldKey = GlobalKey();
-  final GlobalKey<AiSelectionToolbarState> _toolbarKey = GlobalKey();
+  static const String _browserUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 每次返回编辑界面时同步 provider 的内容到 TextField
+    _loadSavedContent();
+  }
+
   void initState() {
     super.initState();
-    _controller = TextEditingController();
-    _loadChapter();
-    _controller.addListener(_onContentChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _loadSavedContent();
+      }
+    });
+    _contentController.addListener(_onContentChanged);
   }
 
-  @override
-  void dispose() {
-    _autoSaveTimer?.cancel();
-    _controller.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadChapter() async {
-    final repo = ref.read(chapterRepositoryProvider);
-    final chapter = await repo.getChapterById(widget.chapterId);
-    if (mounted && chapter != null) {
-      setState(() {
-        _chapter = chapter;
-        _controller.text = chapter.content;
-      });
+  void _loadSavedContent() {
+    final provider = context.read<WritingProvider>();
+    if (provider.state.content.isNotEmpty && _contentController.text != provider.state.content) {
+      _contentController.text = provider.state.content;
     }
   }
 
   void _onContentChanged() {
-    if (!_hasChanges) {
-      setState(() => _hasChanges = true);
-    }
-    _autoSaveTimer?.cancel();
-    _autoSaveTimer = Timer(const Duration(seconds: 3), _autoSave);
+    final provider = context.read<WritingProvider>();
+    provider.setContent(_contentController.text);
   }
 
-  void _onTextChanged(String text, int selectionStart, int selectionEnd) {
-    // Text is already synced via controller
+  @override
+  void dispose() {
+    _contentController.removeListener(_onContentChanged);
+    _contentController.dispose();
+    _focusNode.dispose();
+    super.dispose();
   }
 
-  void _onSelectionAction(String action, String selectedText, int start, int end) {
-    // Forward to toolbar for AI processing
-    _toolbarKey.currentState?.triggerAction(action, selectedText, start, end);
-  }
-
-  void _onToolbarLoadingChanged(bool isLoading) {
-    setState(() => _isAiLoading = isLoading);
-  }
-
-  Future<void> _autoSave() async {
-    if (_chapter == null || !_hasChanges) return;
-    await _saveContent(showIndicator: false);
-  }
-
-  Future<void> _saveContent({bool showIndicator = true}) async {
-    if (_chapter == null) return;
-
-    if (showIndicator) {
-      setState(() => _isSaving = true);
-    }
-
-    final updated = _chapter!.copyWith(
-      content: _controller.text,
-      isEdited: true,
-      wordCount: _countWords(_controller.text),
-      updatedAt: DateTime.now(),
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFFFF6B9D),
+      ),
     );
+  }
+
+  void _onGenerate() async {
+    final state = context.read<WritingProvider>().state;
+    
+    if (state.content.length < 20) {
+      _showSnackBar('再写几个字吧，至少20个字~');
+      return;
+    }
+    
+    if (state.apiKey.isEmpty || state.apiUrl.isEmpty) {
+      _showSnackBar('请先配置API');
+      return;
+    }
+    
+    if (state.selectedModel.isEmpty || state.selectedModel == 'auto') {
+      _showSnackBar('请先选择一个模型');
+      return;
+    }
+    
+    final provider = context.read<WritingProvider>();
+    provider.setGenerating(true);
+    setState(() => _isGenerating = true);
 
     try {
-      await ref.read(chapterActionsProvider.notifier).updateChapter(updated);
-      if (mounted) {
-        setState(() {
-          _chapter = updated;
-          _hasChanges = false;
-        });
-        if (showIndicator) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('已保存'),
-              duration: Duration(seconds: 1),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+      // 构建续写长度对应的字数范围
+      final lengthMap = {0: '100-200', 1: '300-500', 2: '800-1200'};
+      final lengthDesc = lengthMap[state.continuationLength] ?? '300-500';
+
+      // 构建 system prompt
+      final systemPrompt =
+          '你是一个专业的小说续写AI，风格优雅流畅。\n'
+          '根据用户提供的文本，续写3个完全不同方向的故事情节。\n'
+          '每个续写约 ' + lengthDesc + ' 字，3个选项合计约 ' + (state.continuationLength == 0 ? '300-600' : state.continuationLength == 1 ? '900-1500' : '2400-3600') + ' 字。\n'
+          '\n'
+          '【重要格式要求 - 必须严格遵守】\n'
+          '1. 必须严格返回3个选项，不能多也不能少\n'
+          '2. 每个选项之间用独立的 || 行分隔：选项内容换行 || 换行选项内容\n'
+          '3. 不要写任何解释、编号、加粗或其他额外文字\n'
+          '4. 每个选项第一个字符要紧跟上文结尾，不能有前导换行或空格\n'
+          '5. 3个选项要有明显不同的故事走向和结局，方向差异越大越好\n'
+          '\n'
+          '输出格式（示例）：\n'
+          '第一章结束，主角站在城墙上望着远方...\n'
+          '||\n'
+          '就在这时，天空突然裂开一道金色光芒...\n'
+          '||\n'
+          '城中突然响起警报，敌人已经攻破了第一道防线...';
+
+      // 构建消息
+      final messages = [
+        {'role': 'system', 'content': systemPrompt},
+        {'role': 'user', 'content': state.content},
+      ];
+
+      // 构造 API URL（兼容 base URL 是否带 /v1）
+      var baseUrl = state.apiUrl.endsWith('/')
+          ? state.apiUrl.substring(0, state.apiUrl.length - 1)
+          : state.apiUrl;
+      final v1Match = RegExp(r'/v\d+$').firstMatch(baseUrl);
+      if (v1Match != null) {
+        baseUrl = baseUrl.substring(0, v1Match.start);
+      }
+      final apiUrl = '$baseUrl/v1/chat/completions';
+
+      final response = await http.post(
+        Uri.parse(apiUrl),
+        headers: {
+          'Authorization': 'Bearer ${state.apiKey}',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'User-Agent': _browserUserAgent,
+        },
+        body: json.encode({
+          'model': state.selectedModel,
+          'messages': messages,
+          'temperature': 0.9,
+          'max_tokens': 16384,
+          'n': 3,
+        }),
+      ).timeout(
+        const Duration(seconds: 90),
+        onTimeout: () => throw Exception('请求超时，请检查网络连接'),
+      );
+
+      if (response.statusCode != 200) {
+        String errMsg = '请求失败 (${response.statusCode})';
+        try {
+          final errBody = json.decode(response.body);
+          errMsg = errBody['error']?['message'] ?? errBody['error']?['msg'] ?? response.body;
+        } catch (_) {}
+        throw Exception(errMsg);
+      }
+
+      final data = json.decode(response.body) as Map<String, dynamic>;
+      final choices = data['choices'] as List?;
+      if (choices == null || choices.isEmpty) {
+        throw Exception('返回数据格式异常：无 choices');
+      }
+      // 优先策略：从 choices 数组直接取全部 n 条结果（n=3 已设置）
+      final List<String> options = [];
+      for (final choice in choices) {
+        final content = choice['message']?['content']?.toString() ?? '';
+        if (content.isNotEmpty) {
+          options.add(content.trim());
         }
       }
-    } catch (e) {
-      if (mounted && showIndicator) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('保存失败: $e')),
-        );
-      }
-    } finally {
-      if (mounted && showIndicator) {
-        setState(() => _isSaving = false);
-      }
-    }
-  }
+      print('[AI续写解析] 从 choices 数组直接获取 ${options.length} 条结果');
 
-  int _countWords(String text) {
-    if (text.isEmpty) return 0;
-    final chinese = text.replaceAll(RegExp(r'[a-zA-Z0-9]'), '').length;
-    final english = text
-        .replaceAll(RegExp(r'[^a-zA-Z0-9]'), ' ')
-        .split(RegExp(r'\s+'))
-        .where((w) => w.isNotEmpty)
-        .length;
-    return chinese + english;
+      // 如果 choices 不足3条，尝试用各种方式从首个回复中提取3个选项
+      if (options.length < 3 && choices.isNotEmpty) {
+        final firstText = choices.first['message']?['content']?.toString() ?? '';
+        print('[AI续写解析] 首个回复长度: ${firstText.length} chars, 内容预览: ${firstText.length > 100 ? '${firstText.substring(0, 100)}...' : firstText}');
+
+        // 策略1：按独立 || 行分割
+        final byNewline = firstText.split(RegExp(r'\n\s*\|\|\s*\n')).map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+        // 策略2：按 inline || 分割
+        final byInline = firstText.split('||').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+        // 策略3：按 ---选项X--- 分隔符分割
+        final byOptionTag = firstText.split(RegExp(r'---\s*选项\d+\s*---')).where((e) => e.trim().isNotEmpty).toList();
+        // 策略4：按段落空行分割
+        final byParagraph = firstText.split(RegExp(r'\n\s*\n')).where((e) => e.trim().isNotEmpty).toList();
+
+        List<String> bestSplit = [];
+        String strategy = '';
+
+        if (byNewline.length >= 3) {
+          bestSplit = byNewline.take(3).toList(); strategy = '独立||行';
+        } else if (byInline.length >= 3) {
+          bestSplit = byInline.take(3).toList(); strategy = 'inline||';
+        } else if (byOptionTag.length >= 3) {
+          bestSplit = byOptionTag.take(3).toList(); strategy = '---选项X---';
+        } else if (byParagraph.length >= 3) {
+          bestSplit = byParagraph.take(3).toList(); strategy = '段落空行';
+        } else if (byNewline.length == 2) {
+          bestSplit = byNewline.toList(); strategy = '独立||行(仅2)';
+        } else if (byInline.length == 2) {
+          bestSplit = byInline.toList(); strategy = 'inline||(仅2)';
+        } else if (byParagraph.length == 2) {
+          bestSplit = byParagraph.toList(); strategy = '段落空行(仅2)';
+        } else if (byOptionTag.length == 2) {
+          bestSplit = byOptionTag.toList(); strategy = '---选项X---(仅2)';
+        } else {
+          // 最后手段：强制按字符数三等分
+          final totalLen = firstText.length;
+          if (totalLen > 200) {
+            final third = totalLen ~/ 3;
+            bestSplit = [
+              firstText.substring(0, third).trim(),
+              firstText.substring(third, third * 2).trim(),
+              firstText.substring(third * 2).trim(),
+            ];
+            strategy = '强制三等分';
+          }
+        }
+
+        print('[AI续写解析] 使用策略: $strategy, 得到 ${bestSplit.length} 个选项: ${bestSplit.map((e) => '${e.length}chars').toList()}');
+
+        if (bestSplit.length >= 2) {
+          options.clear();
+          options.addAll(bestSplit);
+        }
+      }
+
+      if (options.isEmpty) {
+        throw Exception('生成内容为空，请尝试更换模型');
+      }
+
+      final displayOptions = options.take(3).toList();
+      print('[AI续写解析] 最终 displayOptions 共 ${displayOptions.length} 条');
+
+      // 转换为 ContinuationResultItem
+      final provider = context.read<WritingProvider>();
+      final resultItems = displayOptions.asMap().entries.map((e) => ContinuationResultItem(
+        content: e.value,
+        isNew: e.key < 3,
+      )).toList();
+
+      // 设置结果到provider
+      provider.setContinuationResults(resultItems);
+      provider.setCurrentResultIndex(0);
+
+      // 显示续写结果模式
+      setState(() {
+        _showContinuationOptions = true;
+        _isGenerating = false;
+      });
+      provider.setGenerating(false);
+
+    } catch (e) {
+      setState(() => _isGenerating = false);
+      provider.setGenerating(false);
+      _showSnackBar('续写失败: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final wordCount = _countWords(_controller.text);
-
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_chapter?.title ?? '加载中...'),
-        actions: [
-          if (_isSaving || _isAiLoading)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Center(
-                child: SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              ),
-            )
-          else if (_hasChanges)
-            IconButton(
-              icon: const Icon(Icons.save_outlined),
-              onPressed: () => _saveContent(),
-              tooltip: '保存',
-            )
-          else
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Center(
-                child: Icon(Icons.check_circle, color: AppColors.success, size: 20),
-              ),
+      backgroundColor: AppColors.typewriterCream,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // 顶部导航栏
+            _buildTopBar(),
+            
+            // 主内容区
+            Expanded(child: _buildMainContent()),
+            
+            // 底部输入栏
+            _buildBottomBar(),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildTopBar() {
+    return Container(
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          const Spacer(),
+          // 标题
+          const Text(
+            '妙笔写作',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: AppColors.ink,
             ),
+          ),
+          const Spacer(),
+          // 设置按钮
+          IconButton(
+            icon: const Icon(Icons.settings, color: AppColors.ink),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+              );
+            },
+          ),
         ],
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: Container(
-              margin: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(AppRadius.card),
-                boxShadow: AppShadows.light,
-                border: Border.all(color: AppColors.divider, width: 1),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppRadius.card),
-                child: NativeSelectionTextField(
-                  key: _textFieldKey,
-                  controller: _controller,
-                  hintText: '开始你的创作...',
-                  textStyle: const TextStyle(
-                    fontSize: 16,
-                    height: 1.8,
-                    color: AppColors.textPrimary,
-                  ),
-                  onSelectionAction: _onSelectionAction,
-                  onTextChanged: _onTextChanged,
-                ),
-              ),
-            ),
-          ),
-          AiSelectionToolbar(
-            key: _toolbarKey,
-            textFieldKey: _textFieldKey,
-            onLoadingChanged: _onToolbarLoadingChanged,
-          ),
-          Container(
-            padding: EdgeInsets.fromLTRB(
-              16,
-              8,
-              16,
-              8 + MediaQuery.of(context).padding.bottom,
-            ),
+    );
+  }
+
+  /// 创作页面主内容区（按新设计：纵向三区域布局）
+  Widget _buildMainContent() {
+    if (_currentTabIndex == 1) {
+      return _buildOneLineContinuation();
+    } else if (_currentTabIndex == 2) {
+      return _buildWorldCreation();
+    }
+    
+    // 创作页面 - 检查是否显示续写结果模式
+    if (_showContinuationOptions) {
+      return Consumer<WritingProvider>(
+        builder: (context, provider, _) {
+          final results = provider.state.continuationResults;
+          final selectedIndex = provider.state.currentResultIndex;
+          
+          if (results.isEmpty) {
+            return _buildNormalEditorLayout();
+          }
+          
+          return _buildContinuationResultLayout(provider, results, selectedIndex);
+        },
+      );
+    }
+    
+    // 普通编辑模式
+    return _buildNormalEditorLayout();
+  }
+  
+  /// 普通编辑模式布局
+  Widget _buildNormalEditorLayout() {
+    return Column(
+      children: [
+        // 续写方向选择
+        if (_showDirectionSelector) ...[
+          const DirectionSelector(),
+          const Divider(height: 1),
+        ],
+        
+        // 续写建议
+        const ContinuationSuggestions(),
+        
+        // 编辑区域
+        Expanded(
+          child: Container(
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.surface,
-              border: Border(top: BorderSide(color: AppColors.divider)),
+              color: AppColors.typewriterPaper,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
+            child: TextField(
+              controller: _contentController,
+              focusNode: _focusNode,
+              maxLines: null,
+              expands: true,
+              textAlignVertical: TextAlignVertical.top,
+              style: const TextStyle(
+                fontSize: 16,
+                color: AppColors.ink,
+                height: 1.8,
+              ),
+              decoration: InputDecoration(
+                hintText: '在此处开始写作...',
+                hintStyle: TextStyle(
+                  color: AppColors.hint.withOpacity(0.45),
+                  fontSize: 16,
+                ),
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+          ),
+        ),
+        
+        // 字数统计
+        Consumer<WritingProvider>(
+          builder: (context, provider, _) => Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
                 Text(
-                  '$wordCount 字',
-                  style: AppTextStyles.caption(context),
+                  '${provider.state.wordCount}字',
+                  style: const TextStyle(color: AppColors.faded, fontSize: 12),
                 ),
                 const Spacer(),
-                if (_hasChanges)
-                  Text(
-                    '未保存',
-                    style: AppTextStyles.caption(context).copyWith(
-                      color: AppColors.warning,
-                    ),
-                  ),
+                Text(
+                  '👍 ${provider.state.likedCount}',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                const SizedBox(width: 16),
+                Text(
+                  '👎 ${provider.state.dislikedCount}',
+                  style: const TextStyle(fontSize: 12),
+                ),
               ],
             ),
           ),
+        ),
+      ],
+    );
+  }
+  
+  /// 续写结果模式布局（按设计文档：编辑区+操作栏+推荐区）
+  Widget _buildContinuationResultLayout(
+    WritingProvider provider,
+    List<ContinuationResultItem> results,
+    int selectedIndex,
+  ) {
+    return Column(
+      children: [
+        // 区域一：正文编辑区
+        Expanded(
+          flex: 60,
+          child: Column(
+            children: [
+              // 编辑区域
+              Expanded(
+                child: Container(
+                  margin: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.typewriterPaper,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 原文（黑色）
+                        Text(
+                          provider.state.originalContent ?? provider.state.content,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            color: AppColors.ink,
+                            height: 1.8,
+                          ),
+                        ),
+                        // 续写内容（红色），拼在原文后面
+                        if (selectedIndex >= 0 && selectedIndex < results.length) ...[
+                          Text(
+                            results[selectedIndex].content,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              color: Color(0xFFFF3B3B),
+                              height: 1.8,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              
+              // 分隔线
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                height: 2,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFF3B3B),
+                ),
+              ),
+            ],
+          ),
+        ),
+        
+        // 区域二：操作按钮栏
+        Container(
+          height: 52,
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(26),
+            gradient: const LinearGradient(
+              colors: [Colors.white, Color(0xFFFF3B3B)],
+              stops: [0.5, 0.5],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFFF3B3B).withOpacity(0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _ActionBtn(label: '撤回', color: const Color(0xFFFF3B3B), onTap: () {
+                      // 关闭续写结果界面，回到编辑状态
+                      // 注意：不调用 undoContinuation()，因为 undoContinuation() 语义是"撤销上一次已应用的操作"
+                      // 而用户在此界面还没点"使用"，不需要撤销内容
+                      setState(() => _showContinuationOptions = false);
+                    }),
+                    _ActionBtn(label: '修改', color: const Color(0xFFFF3B3B), onTap: () {}),
+                    _ActionBtn(label: '保存', color: const Color(0xFFFF3B3B), onTap: () {
+                      // 直接从 results 计算新内容，避免依赖 applyContinuationResult 的状态同步
+                      if (selectedIndex >= 0 && selectedIndex < results.length) {
+                        final result = results[selectedIndex];
+                        final baseContent = provider.state.originalContent ?? provider.state.content;
+                        final newContent = baseContent + result.content;
+                        _contentController.text = newContent;
+                        provider.setContent(newContent);
+                      }
+                      setState(() => _showContinuationOptions = false);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('已保存~'), backgroundColor: Color(0xFFFF6B9D)),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: _isGenerating
+                    ? const Center(
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF3B3B)),
+                          ),
+                        ),
+                      )
+                    : _ActionBtn(
+                        label: 'AI续写',
+                        color: Colors.white,
+                        isAccent: true,
+                        onTap: () => _onGenerate(),
+                      ),
+              ),
+            ],
+          ),
+        ),
+        
+        // 区域三：AI续写推荐选择区
+        Expanded(
+          flex: 30,
+          child: Column(
+            children: [
+              _buildRecommendationHeader(provider, results, selectedIndex),
+              Expanded(
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  itemCount: results.length,
+                  itemBuilder: (context, index) {
+                    return _buildContinuationCard(
+                      results[index].content,
+                      index == selectedIndex,
+                      index < 3,
+                      () {
+                        provider.setCurrentResultIndex(index);
+                        setState(() {});
+                      },
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+  
+  Widget _buildRecommendationHeader(WritingProvider provider, List<ContinuationResultItem> results, int selectedIndex) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF0F7),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Center(child: Text('🐋', style: TextStyle(fontSize: 18))),
+          ),
+          const SizedBox(width: 8),
+          const Text(
+            'AI续写推荐',
+            style: TextStyle(fontSize: 14, color: Color(0xFF333333), fontWeight: FontWeight.w600),
+          ),
+          const Spacer(),
+          GestureDetector(
+            onTap: () => _onGenerate(),
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: const BoxDecoration(
+                color: Color(0xFFFF6B9D),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.refresh, color: Colors.white, size: 18),
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Text('换一批', style: TextStyle(fontSize: 13, color: Color(0xFF333333))),
+          const SizedBox(width: 16),
+          ElevatedButton(
+            onPressed: selectedIndex >= 0 ? () {
+              final result = results[selectedIndex];
+              final baseContent = provider.state.originalContent ?? provider.state.content;
+              final newContent = baseContent + result.content;
+              _contentController.text = newContent;
+              provider.setContent(newContent);
+              setState(() => _showContinuationOptions = false);
+            } : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF3B3B),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            ),
+            child: const Text('使用'),
+          ),
         ],
+      ),
+    );
+  }
+  
+  Widget _buildContinuationCard(String content, bool isSelected, bool isNew, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 260,
+        margin: const EdgeInsets.symmetric(horizontal: 8),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? const Color(0xFFFF3B3B) : const Color(0xFFE0E0E0),
+            width: isSelected ? 2 : 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: (isSelected ? const Color(0xFFFF3B3B) : Colors.black).withOpacity(0.06),
+              blurRadius: isSelected ? 10 : 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (isNew)
+              Align(
+                alignment: Alignment.topRight,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF6B9D),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text('New', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            if (isNew) const SizedBox(height: 8),
+            Expanded(
+              child: Text(
+                content,
+                style: const TextStyle(fontSize: 14, color: Color(0xFFFF3B3B), height: 1.6),
+                maxLines: 8,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _ActionBtn({
+    required String label,
+    required Color color,
+    bool isAccent = false,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(26),
+        child: Container(
+          height: 52,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          alignment: Alignment.center,
+          decoration: isAccent
+              ? const BoxDecoration(
+                  color: Color(0xFFFF3B3B),
+                  borderRadius: BorderRadius.only(topRight: Radius.circular(26), bottomRight: Radius.circular(26)),
+                )
+              : null,
+          child: Text(
+            label,
+            style: TextStyle(fontSize: 14, color: color, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOneLineContinuation() {
+    return const Center(
+      child: Text('一行续写模式', style: TextStyle(fontSize: 16)),
+    );
+  }
+
+  Widget _buildWorldCreation() {
+    return const Center(
+      child: Text('创造世界模式', style: TextStyle(fontSize: 16)),
+    );
+  }
+
+  Widget _buildBottomBar() {
+    return Consumer<WritingProvider>(
+      builder: (context, provider, _) => BottomInputBar(
+        isGenerating: provider.state.isGenerating,
+        selectedStyle: provider.state.selectedStyle,
+        onStyleSelected: provider.setSelectedStyle,
+        onGenerate: _onGenerate,
+        onUndo: provider.undo,
+        onRedo: provider.redo,
+        canUndo: provider.state.canUndo,
+        canRedo: provider.state.canRedo,
+        onExpand: () {},
+        onShrink: () {},
+        onRewrite: () {},
+        onDirectedContinuation: () {},
       ),
     );
   }

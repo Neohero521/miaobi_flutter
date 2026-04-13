@@ -1,381 +1,167 @@
-import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../features/writing/presentation/providers/settings_provider.dart';
-import '../app/theme/app_theme.dart';
-import 'native_selection_text_field.dart';
+import '../models/editing_models.dart';
 
-/// The supported selection action types.
-enum SelectionAction {
-  expand('扩写', '将选中内容进行扩展丰富'),
-  shrink('缩写', '将选中内容精简压缩'),
-  rewrite('改写', '重新改写选中内容'),
-  directed('定向续写', '根据选中内容引导后续发展');
+class SelectionActionToolbar extends StatelessWidget {
+  final String selectedText;
+  final VoidCallback onRewrite;
+  final VoidCallback onExpand;
+  final VoidCallback onShrink;
+  final VoidCallback onDelete;
+  final VoidCallback onDismiss;
 
-  final String label;
-  final String description;
-
-  const SelectionAction(this.label, this.description);
-}
-
-/// Result of a text AI operation.
-class TextOperationResult {
-  final String originalText;
-  final String newText;
-  final int start;
-  final int end;
-  final SelectionAction action;
-
-  TextOperationResult({
-    required this.originalText,
-    required this.newText,
-    required this.start,
-    required this.end,
-    required this.action,
-  });
-}
-
-/// Toolbar widget that handles AI selection actions.
-///
-/// Usage:
-/// ```dart
-/// final textFieldKey = GlobalKey<NativeSelectionTextFieldState>();
-/// final toolbarKey = GlobalKey<AiSelectionToolbarState>();
-///
-/// NativeSelectionTextField(
-///   key: textFieldKey,
-///   onSelectionAction: (action, text, start, end) {
-///     toolbarKey.currentState?.triggerAction(action, text, start, end);
-///   },
-/// ),
-///
-/// AiSelectionToolbar(
-///   key: toolbarKey,
-///   textFieldKey: textFieldKey,
-/// ),
-/// ```
-class AiSelectionToolbar extends ConsumerStatefulWidget {
-  /// Key to the NativeSelectionTextField state for calling replaceText.
-  final GlobalKey<NativeSelectionTextFieldState> textFieldKey;
-
-  /// Called when AI processing is complete and text has been replaced.
-  final void Function(TextOperationResult result)? onTextReplaced;
-
-  /// Called when AI request starts/finishes.
-  final void Function(bool isLoading)? onLoadingChanged;
-
-  const AiSelectionToolbar({
+  const SelectionActionToolbar({
     super.key,
-    required this.textFieldKey,
-    this.onTextReplaced,
-    this.onLoadingChanged,
+    required this.selectedText,
+    required this.onRewrite,
+    required this.onExpand,
+    required this.onShrink,
+    required this.onDelete,
+    required this.onDismiss,
   });
-
-  @override
-  ConsumerState<AiSelectionToolbar> createState() => AiSelectionToolbarState();
-}
-
-class AiSelectionToolbarState extends ConsumerState<AiSelectionToolbar> {
-  bool _isLoading = false;
-  String? _loadingActionLabel;
-  String? _errorMessage;
-  String? _generatedText;
-  int? _pendingStart;
-  int? _pendingEnd;
-  String? _pendingOriginalText;
-  SelectionAction? _pendingAction;
-
-  /// Trigger an AI action for the given selection.
-  /// Call this from the [NativeSelectionTextField.onSelectionAction] callback.
-  void triggerAction(
-    String action,
-    String selectedText,
-    int start,
-    int end,
-  ) {
-    final actionEnum = _parseAction(action);
-    if (actionEnum == null) return;
-
-    setState(() {
-      _isLoading = true;
-      _loadingActionLabel = actionEnum.label;
-      _errorMessage = null;
-      _generatedText = null;
-      _pendingStart = start;
-      _pendingEnd = end;
-      _pendingOriginalText = selectedText;
-      _pendingAction = actionEnum;
-    });
-    widget.onLoadingChanged?.call(true);
-
-    _callAI(
-      action: actionEnum,
-      selectedText: selectedText,
-    ).then((result) {
-      if (mounted) {
-        setState(() {
-          _generatedText = result;
-          _isLoading = false;
-          _loadingActionLabel = null;
-        });
-        widget.onLoadingChanged?.call(false);
-      }
-    }).catchError((e) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = e.toString();
-          _isLoading = false;
-          _loadingActionLabel = null;
-        });
-        widget.onLoadingChanged?.call(false);
-      }
-    });
-  }
-
-  SelectionAction? _parseAction(String action) {
-    switch (action) {
-      case 'expand':
-        return SelectionAction.expand;
-      case 'shrink':
-        return SelectionAction.shrink;
-      case 'rewrite':
-        return SelectionAction.rewrite;
-      case 'directed':
-        return SelectionAction.directed;
-      default:
-        return null;
-    }
-  }
-
-  Future<String> _callAI({
-    required SelectionAction action,
-    required String selectedText,
-  }) async {
-    final settingsAsync = ref.read(settingsProvider);
-    final settings = settingsAsync.valueOrNull;
-    if (settings == null || settings.apiKey.isEmpty) {
-      throw Exception('请先在设置中配置 API Key');
-    }
-
-    String systemPrompt;
-    String userPrompt;
-
-    switch (action) {
-      case SelectionAction.expand:
-        systemPrompt = '你是一位专业的小说写作者，擅长扩展和丰富文本内容。';
-        userPrompt = '请扩写以下内容，使其更加丰富详细（保持原有风格）：\n\n$selectedText';
-        break;
-      case SelectionAction.shrink:
-        systemPrompt = '你是一位专业的小说写作者，擅长精简和压缩文本内容。';
-        userPrompt = '请缩写以下内容，保留核心信息：\n\n$selectedText';
-        break;
-      case SelectionAction.rewrite:
-        systemPrompt = '你是一位专业的小说写作者，擅长重新表达和改写文本。';
-        userPrompt = '请重新改写以下内容，保持相同的意思但用不同的表达方式：\n\n$selectedText';
-        break;
-      case SelectionAction.directed:
-        systemPrompt = '你是一位专业的小说写作者，擅长故事续写，风格多样。';
-        userPrompt = '请根据以下内容进行续写，开头需要自然衔接：\n\n$selectedText';
-        break;
-    }
-
-    final uri = Uri.parse('${settings.apiUrl}/text/chatcompletion_v2');
-    final httpClient = HttpClient();
-
-    try {
-      final request = await httpClient.postUrl(uri);
-      request.headers.set('Content-Type', 'application/json');
-      request.headers.set('Authorization', 'Bearer ${settings.apiKey}');
-
-      final body = jsonEncode({
-        if (settings.selectedModel != 'auto') 'model': settings.selectedModel,
-        'messages': [
-          {'role': 'system', 'content': systemPrompt},
-          {'role': 'user', 'content': userPrompt},
-        ],
-      });
-
-      request.write(body);
-
-      final httpResponse = await request.close();
-      final responseBody = await httpResponse.transform(utf8.decoder).join();
-
-      if (httpResponse.statusCode != 200) {
-        throw Exception('API请求失败: ${httpResponse.statusCode}');
-      }
-
-      final data = jsonDecode(responseBody) as Map<String, dynamic>;
-      final choices = data['choices'] as List<dynamic>?;
-      if (choices == null || choices.isEmpty) {
-        throw Exception('API返回格式异常');
-      }
-      final message = choices.first['message'] as Map<String, dynamic>?;
-      if (message == null) {
-        throw Exception('API返回格式异常: 缺少message字段');
-      }
-      return message['content'] as String? ?? '';
-    } finally {
-      httpClient.close();
-    }
-  }
-
-  Future<void> _applyResult() async {
-    if (_generatedText == null ||
-        _pendingStart == null ||
-        _pendingEnd == null ||
-        _pendingOriginalText == null ||
-        _pendingAction == null) {
-      return;
-    }
-
-    final textFieldState = widget.textFieldKey.currentState;
-    if (textFieldState == null) return;
-
-    await textFieldState.replaceText(
-      _pendingStart!,
-      _pendingEnd!,
-      _generatedText!,
-    );
-
-    widget.onTextReplaced?.call(TextOperationResult(
-      originalText: _pendingOriginalText!,
-      newText: _generatedText!,
-      start: _pendingStart!,
-      end: _pendingEnd!,
-      action: _pendingAction!,
-    ));
-
-    dismiss();
-  }
-
-  /// Dismiss the toolbar UI.
-  void dismiss() {
-    setState(() {
-      _isLoading = false;
-      _loadingActionLabel = null;
-      _errorMessage = null;
-      _generatedText = null;
-      _pendingStart = null;
-      _pendingEnd = null;
-      _pendingOriginalText = null;
-      _pendingAction = null;
-    });
-    widget.onLoadingChanged?.call(false);
-  }
 
   @override
   Widget build(BuildContext context) {
-    if (!_isLoading && _generatedText == null && _errorMessage == null) {
-      return const SizedBox.shrink();
-    }
-
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-        16,
-        12,
-        16,
-        12 + MediaQuery.of(context).padding.bottom,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        boxShadow: AppShadows.medium,
-        border: Border(top: BorderSide(color: AppColors.divider)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (_isLoading) ...[
-            Row(
-              children: [
-                const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  'AI $_loadingActionLabel 中...',
-                  style: AppTextStyles.bodyMedium(context),
-                ),
-                const Spacer(),
-                TextButton(
-                  onPressed: dismiss,
-                  child: const Text('取消'),
-                ),
-              ],
-            ),
-          ] else if (_errorMessage != null) ...[
-            Row(
-              children: [
-                Icon(Icons.error_outline, color: AppColors.error, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _errorMessage!,
-                    style: AppTextStyles.bodySmall(context).copyWith(
-                      color: AppColors.error,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                TextButton(
-                  onPressed: dismiss,
-                  child: const Text('关闭'),
-                ),
-              ],
-            ),
-          ] else if (_generatedText != null) ...[
-            Row(
-              children: [
-                Icon(Icons.auto_awesome, color: AppColors.accent, size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  '$_loadingActionLabel 结果',
-                  style: AppTextStyles.titleMedium(context).copyWith(
-                    color: AppColors.accent,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.accent.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(AppRadius.panel),
-                border: Border.all(color: AppColors.accent.withOpacity(0.2)),
-              ),
-              child: Text(
-                _generatedText!,
-                style: AppTextStyles.bodyMedium(context),
-                maxLines: 4,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: dismiss,
-                    child: const Text('取消'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _applyResult,
-                    child: const Text('采纳'),
-                  ),
-                ),
-              ],
+    return Material(
+      elevation: 8,
+      borderRadius: BorderRadius.circular(12),
+      color: Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _ToolButton(icon: Icons.edit, label: '改写', emoji: '✎', onTap: onRewrite),
+            _ToolButton(icon: Icons.open_in_full, label: '扩写', emoji: '↗', onTap: onExpand),
+            _ToolButton(icon: Icons.short_text, label: '缩写', emoji: '↘', onTap: onShrink),
+            _ToolButton(icon: Icons.delete, label: '删除', emoji: '🗑', onTap: onDelete, isDestructive: true),
+            const VerticalDivider(width: 16),
+            IconButton(
+              icon: const Icon(Icons.close, size: 18),
+              onPressed: onDismiss,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ToolButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String emoji;
+  final VoidCallback onTap;
+  final bool isDestructive;
+
+  const _ToolButton({
+    required this.icon,
+    required this.label,
+    required this.emoji,
+    required this.onTap,
+    this.isDestructive = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        constraints: const BoxConstraints(minWidth: 56, minHeight: 48),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 16)),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                color: isDestructive ? Colors.red : Colors.black87,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// 工具栏按钮
+class ActionBar extends StatelessWidget {
+  final bool canUndo;
+  final bool canRedo;
+  final VoidCallback onUndo;
+  final VoidCallback onRedo;
+  final VoidCallback onCharacter;
+  final VoidCallback onWorld;
+  final VoidCallback onStory;
+  final VoidCallback onShare;
+
+  const ActionBar({
+    super.key,
+    required this.canUndo,
+    required this.canRedo,
+    required this.onUndo,
+    required this.onRedo,
+    required this.onCharacter,
+    required this.onWorld,
+    required this.onStory,
+    required this.onShare,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _ActionBtn(icon: Icons.edit, tooltip: '编辑', onTap: () {}),
+          _ActionBtn(icon: Icons.undo, tooltip: '撤销', onTap: canUndo ? onUndo : null),
+          _ActionBtn(icon: Icons.redo, tooltip: '重做', onTap: canRedo ? onRedo : null),
+          _ActionBtn(icon: Icons.person, tooltip: '角色', onTap: onCharacter),
+          _ActionBtn(icon: Icons.public, tooltip: '世界观', onTap: onWorld),
+          _ActionBtn(icon: Icons.account_tree, tooltip: '故事线', onTap: onStory),
+          _ActionBtn(icon: Icons.share, tooltip: '分享', onTap: onShare),
         ],
+      ),
+    );
+  }
+}
+
+class _ActionBtn extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onTap;
+
+  const _ActionBtn({required this.icon, required this.tooltip, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          child: Icon(
+            icon,
+            size: 20,
+            color: enabled ? Colors.black87 : Colors.grey.shade400,
+          ),
+        ),
       ),
     );
   }
