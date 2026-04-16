@@ -25,6 +25,7 @@ class WritingScreen extends StatefulWidget {
 class _WritingScreenState extends State<WritingScreen> {
   final TextEditingController _contentController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
+  final ScrollController _editorScrollController = ScrollController(); // 编辑器滚动控制器
   bool _showDirectionSelector = false;
   int _currentTabIndex = 0; // 0=创作, 1=一行续写, 2=创造世界
   List<String> _continuationOptions = []; // 续写多选项
@@ -78,9 +79,11 @@ class _WritingScreenState extends State<WritingScreen> {
   @override
   void dispose() {
     _debounceTimer?.cancel();
+    _generatingTipTimer?.cancel();
     _contentController.removeListener(_onContentChanged);
     _contentController.dispose();
     _focusNode.dispose();
+    _editorScrollController.dispose();
     super.dispose();
   }
 
@@ -198,6 +201,37 @@ class _WritingScreenState extends State<WritingScreen> {
         child: const HistoryBottomSheet(),
       ),
     );
+  }
+  
+  /// 更新内容同时保持滚动位置
+  void _updateContentPreservingScroll(String newContent) {
+    if (!mounted) return;
+    // 保存当前滚动位置和内容长度
+    final oldScrollPosition = _editorScrollController.hasClients 
+        ? _editorScrollController.position.pixels 
+        : 0.0;
+    final oldContentLength = _contentController.text.length;
+    
+    // 更新内容
+    _contentController.text = newContent;
+    
+    // 恢复滚动位置（在下一帧）
+    if (_editorScrollController.hasClients) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_editorScrollController.hasClients) {
+          // 计算新的滚动位置：保持相对位置
+          final newContentLength = newContent.length;
+          final ratio = oldContentLength > 0 
+              ? oldScrollPosition / oldContentLength 
+              : 0.0;
+          final newScrollPosition = ratio * newContentLength;
+          final maxScroll = _editorScrollController.position.maxScrollExtent;
+          _editorScrollController.jumpTo(
+            newScrollPosition.clamp(0.0, maxScroll),
+          );
+        }
+      });
+    }
   }
 
   /// AI写作处理（扩写/缩写/改写/定向续写）
@@ -435,7 +469,7 @@ class _WritingScreenState extends State<WritingScreen> {
           'messages': messages,
           'temperature': 0.9,
           'max_tokens': 16384,
-          'n': 3,
+          'n': 1,  // 某些API Key限制n=1
         }),
       ).timeout(
         const Duration(seconds: 90),
@@ -716,6 +750,7 @@ class _WritingScreenState extends State<WritingScreen> {
               ],
             ),
             child: SingleChildScrollView(
+              controller: _editorScrollController,
               child: TextField(
                 controller: _contentController,
                 focusNode: _focusNode,
@@ -898,7 +933,7 @@ class _WritingScreenState extends State<WritingScreen> {
                         final result = results[selectedIndex];
                         final baseContent = provider.state.originalContent ?? provider.state.content;
                         final newContent = baseContent + result.content;
-                        _contentController.text = newContent;
+                        _updateContentPreservingScroll(newContent);
                         provider.setContent(newContent);
                       }
                       provider.setContinuationIdle();
@@ -1012,7 +1047,7 @@ class _WritingScreenState extends State<WritingScreen> {
               final result = results[selectedIndex];
               final baseContent = provider.state.originalContent ?? provider.state.content;
               final newContent = baseContent + result.content;
-              _contentController.text = newContent;
+              _updateContentPreservingScroll(newContent);
               provider.setContent(newContent);
               provider.setContinuationIdle();
               setState(() {
