@@ -723,7 +723,7 @@ class _WritingScreenState extends State<WritingScreen> {
               child: TextField(
                 controller: _contentController,
                 focusNode: _focusNode,
-                maxLines: null,
+                maxLines: 1000,  // 设置合理最大行数，让内容超出时可以滚动
                 textAlignVertical: TextAlignVertical.top,
                 style: const TextStyle(
                   fontSize: 16,
