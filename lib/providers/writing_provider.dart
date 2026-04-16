@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
@@ -428,7 +427,11 @@ class WritingProvider extends ChangeNotifier {
   }
   
   void setContinuationIdle() {
-    _state = _state.copyWith(continuationStatus: ContinuationStatus.idle);
+    _state = _state.copyWith(
+      continuationStatus: ContinuationStatus.idle,
+      continuationResults: const [],
+      originalContent: null,
+    );
     notifyListeners();
   }
   
@@ -445,7 +448,6 @@ class WritingProvider extends ChangeNotifier {
     final newContent = baseContent + result.content;
     _state = _state.copyWith(lastGeneratedContent: newContent);
     setContent(newContent);
-    setContinuationIdle();
   }
   
   void undoContinuation() {
