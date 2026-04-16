@@ -130,6 +130,22 @@ class _WritingScreenState extends State<WritingScreen> {
 
   /// 将API错误映射为友好提示
   String _mapApiError(dynamic error, int? statusCode) {
+    // 尝试从响应体中提取API返回的错误信息
+    if (error is String && error.contains('{')) {
+      try {
+        final body = error;
+        if (body.contains('"error"')) {
+          final errMatch = RegExp(r'"error"\s*:\s*\{[^}]+\}').firstMatch(body);
+          if (errMatch != null) {
+            final msgMatch = RegExp(r'"message"\s*:\s*"([^"]+)"').firstMatch(errMatch.group(0)!);
+            if (msgMatch != null) {
+              return 'API错误: ${msgMatch.group(1)}';
+            }
+          }
+        }
+      } catch (_) {}
+    }
+    
     if (statusCode != null) {
       switch (statusCode) {
         case 400:
@@ -258,6 +274,8 @@ class _WritingScreenState extends State<WritingScreen> {
       );
 
       if (response.statusCode != 200) {
+        // 输出详细错误日志
+        debugPrint('API错误 ${response.statusCode}: ${response.body}');
         final friendlyMsg = _mapApiError(response.body, response.statusCode);
         throw Exception(friendlyMsg);
       }
