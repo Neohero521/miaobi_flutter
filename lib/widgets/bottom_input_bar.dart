@@ -216,7 +216,7 @@ class _StarBurstPainter extends CustomPainter {
 
     // 粉紫渐变
     const gradient = LinearGradient(
-      colors: [Color(0xFFFF6B9D), Color(0xFFC77DFF)],
+      colors: [AppColors.brandPink, Color(0xFFC77DFF)],
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     );
@@ -229,7 +229,7 @@ class _StarBurstPainter extends CustomPainter {
     final miniCenter = Offset(size.width * 0.28, size.height * 0.72);
     final miniPaint = Paint()
       ..shader = const LinearGradient(
-        colors: [Color(0xFFFF6B9D), Color(0xFFC77DFF)],
+        colors: [AppColors.brandPink, Color(0xFFC77DFF)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ).createShader(Rect.fromCircle(center: miniCenter, radius: miniRadius));
@@ -384,7 +384,7 @@ class _StyleSelectButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFFF6B6B).withOpacity(0.35)),
+          border: Border.all(color: AppColors.brandRed.withOpacity(0.35)),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.05),
@@ -396,12 +396,12 @@ class _StyleSelectButton extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.smart_toy_outlined, color: Color(0xFFFF6B6B), size: 16),
+            const Icon(Icons.smart_toy_outlined, color: AppColors.brandRed, size: 16),
             const SizedBox(width: 4),
             Text(
               selectedStyle.label,
               style: const TextStyle(
-                color: Color(0xFFFF6B6B),
+                color: AppColors.brandRed,
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
@@ -409,7 +409,7 @@ class _StyleSelectButton extends StatelessWidget {
             const SizedBox(width: 1),
             Icon(
               isOpen ? Icons.arrow_drop_up : Icons.arrow_drop_down,
-              color: const Color(0xFFFF6B6B),
+              color: AppColors.brandRed,
               size: 18,
             ),
           ],
@@ -436,7 +436,7 @@ class _AiContinueButton extends StatelessWidget {
         height: 40,
         padding: const EdgeInsets.symmetric(horizontal: 18),
         decoration: BoxDecoration(
-          color: isGenerating ? Colors.grey.shade400 : const Color(0xFFFF3B3B),
+          color: isGenerating ? Colors.grey.shade400 : AppColors.brandRed,
           borderRadius: BorderRadius.circular(20),
           boxShadow: isGenerating
               ? null
@@ -520,14 +520,14 @@ class _StarFunctionPanel extends StatelessWidget {
             label: '扩写',
             onTap: onExpand,
           ),
-          Container(height: 1, color: Color(0xFFF0F0F0), margin: EdgeInsets.symmetric(horizontal: 16)),
+          Container(height: 1, color: AppColors.divider, margin: EdgeInsets.symmetric(horizontal: 16)),
           // 缩写选项
           _VerticalFunctionItem(
             icon: Icons.short_text,
             label: '缩写',
             onTap: onShrink,
           ),
-          Container(height: 1, color: Color(0xFFF0F0F0), margin: EdgeInsets.symmetric(horizontal: 16)),
+          Container(height: 1, color: AppColors.divider, margin: EdgeInsets.symmetric(horizontal: 16)),
           // 改写选项（带→箭头）
           _VerticalFunctionItem(
             icon: Icons.edit_outlined,
@@ -535,7 +535,7 @@ class _StarFunctionPanel extends StatelessWidget {
             trailing: '→',
             onTap: onRewrite,
           ),
-          Container(height: 1, color: Color(0xFFF0F0F0), margin: EdgeInsets.symmetric(horizontal: 16)),
+          Container(height: 1, color: AppColors.divider, margin: EdgeInsets.symmetric(horizontal: 16)),
           // 定向续写选项
           _VerticalFunctionItem(
             icon: Icons.auto_awesome,
@@ -548,7 +548,7 @@ class _StarFunctionPanel extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8F4FF),
+              color: AppColors.warmPurpleBg,
               borderRadius: const BorderRadius.only(
                 bottomLeft: Radius.circular(16),
                 bottomRight: Radius.circular(16),
@@ -569,7 +569,7 @@ class _StarFunctionPanel extends StatelessWidget {
                     '例: 请帮我增加更多战斗场景的描写',
                     style: TextStyle(
                       fontSize: 11,
-                      color: Color(0xFF888888),
+                      color: AppColors.textHint,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -615,14 +615,14 @@ class _VerticalFunctionItem extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
-            Icon(icon, size: 20, color: Color(0xFF666666)),
+            Icon(icon, size: 20, color: AppColors.textSecondary),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 label,
                 style: const TextStyle(
                   fontSize: 14,
-                  color: Color(0xFF333333),
+                  color: AppColors.textPrimary,
                 ),
               ),
             ),
@@ -646,7 +646,7 @@ class _MiniStarPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     const gradient = LinearGradient(
-      colors: [Color(0xFFFF6B9D), Color(0xFFC77DFF)],
+      colors: [AppColors.brandPink, Color(0xFFC77DFF)],
     );
     final paint = Paint()
       ..shader = gradient.createShader(Rect.fromCircle(center: center, radius: 7));
@@ -746,7 +746,7 @@ class _StylePanel extends StatelessWidget {
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
                   decoration: BoxDecoration(
-                    color: isSelected ? const Color(0xFFFFF0F0) : Colors.transparent,
+                    color: isSelected ? AppColors.warmPinkBg : Colors.transparent,
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Row(
@@ -762,7 +762,7 @@ class _StylePanel extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                            color: isSelected ? const Color(0xFFFF6B6B) : const Color(0xFF333333),
+                            color: isSelected ? AppColors.brandRed : AppColors.textPrimary,
                           ),
                         ),
                       ),
@@ -770,7 +770,7 @@ class _StylePanel extends StatelessWidget {
                         const Icon(
                           Icons.check,
                           size: 14,
-                          color: Color(0xFFFF6B6B),
+                          color: AppColors.brandRed,
                         ),
                     ],
                   ),

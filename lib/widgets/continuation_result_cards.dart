@@ -45,7 +45,7 @@ class _ContinuationResultCardsState extends State<ContinuationResultCards> {
       return const Center(
         child: Text(
           '暂无结果',
-          style: TextStyle(color: Color(0xFFFF6B9D)),
+          style: TextStyle(color: AppColors.brandPink),
         ),
       );
     }

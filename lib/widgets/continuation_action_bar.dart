@@ -25,14 +25,14 @@ class ContinuationActionBar extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(26),
         gradient: const LinearGradient(
-          colors: [Colors.white, Color(0xFFFF3B3B)],
+          colors: [Colors.white, AppColors.brandRed],
           stops: [0.5, 0.5],
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFFF3B3B).withOpacity(0.3),
+            color: AppColors.brandRed.withOpacity(0.3),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -48,17 +48,17 @@ class ContinuationActionBar extends StatelessWidget {
                 if (showUndo)
                   _ActionButton(
                     label: '撤回',
-                    color: const Color(0xFFFF3B3B),
+                    color: AppColors.brandRed,
                     onTap: onUndo,
                   ),
                 _ActionButton(
                   label: '修改',
-                  color: const Color(0xFFFF3B3B),
+                  color: AppColors.brandRed,
                   onTap: onModify,
                 ),
                 _ActionButton(
                   label: '保存',
-                  color: const Color(0xFFFF3B3B),
+                  color: AppColors.brandRed,
                   onTap: onSave,
                 ),
               ],
@@ -105,7 +105,7 @@ class _ActionButton extends StatelessWidget {
           alignment: Alignment.center,
           decoration: isAccent
               ? const BoxDecoration(
-                  color: Color(0xFFFF3B3B),
+                  color: AppColors.brandRed,
                   borderRadius: BorderRadius.only(
                     topRight: Radius.circular(26),
                     bottomRight: Radius.circular(26),

@@ -58,8 +58,8 @@ class AiContinuationLoadingPage extends StatelessWidget {
                       children: [
                         const ContinuationLoadingIndicator(
                           size: 20,
-                          arcColor: Color(0xFFFF6B9D),
-                          backgroundColor: Color(0xFFFFE4EF),
+                          arcColor: AppColors.brandPink,
+                          backgroundColor: AppColors.warmPinkBg,
                         ),
                         const SizedBox(width: 12),
                         Flexible(
@@ -67,7 +67,7 @@ class AiContinuationLoadingPage extends StatelessWidget {
                             firstLineText ?? '正在为你续写故事...',
                             style: const TextStyle(
                               fontSize: 14,
-                              color: Color(0xFFFF6B9D),
+                              color: AppColors.brandPink,
                             ),
                             textAlign: TextAlign.left,
                           ),
@@ -84,7 +84,7 @@ class AiContinuationLoadingPage extends StatelessWidget {
                       secondLineText ?? '请稍候，AI正在创作中~\n这可能需要几秒钟时间',
                       style: const TextStyle(
                         fontSize: 12,
-                        color: Color(0xFFFF6B9D),
+                        color: AppColors.brandPink,
                         height: 1.6,
                       ),
                       textAlign: TextAlign.center,

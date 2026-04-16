@@ -10,8 +10,8 @@ class ContinuationLoadingIndicator extends StatefulWidget {
   const ContinuationLoadingIndicator({
     super.key,
     this.size = 120,
-    this.arcColor = const Color(0xFFFF6B9D),
-    this.backgroundColor = const Color(0xFFFFE4EF),
+    this.arcColor = AppColors.brandPink,
+    this.backgroundColor = const AppColors.warmPinkBg,
   });
   
   @override

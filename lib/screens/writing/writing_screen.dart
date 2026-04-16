@@ -96,10 +96,10 @@ class _WritingScreenState extends State<WritingScreen> {
           ],
         ),
         backgroundColor: isSuccess
-            ? const Color(0xFF4CAF50)
+            ? AppColors.success
             : isError
-                ? const Color(0xFFE53935)
-                : const Color(0xFFFF6B9D),
+                ? AppColors.error
+                : AppColors.brandPink,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         duration: Duration(seconds: isError ? 4 : 2),
@@ -651,9 +651,9 @@ class _WritingScreenState extends State<WritingScreen> {
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
-              color: const Color(0xFFFFF0F7),
+              color: AppColors.warmPinkBg,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFFF6B9D).withOpacity(0.3)),
+              border: Border.all(color: AppColors.brandPink.withOpacity(0.3)),
             ),
             child: Row(
               children: [
@@ -662,7 +662,7 @@ class _WritingScreenState extends State<WritingScreen> {
                   height: 16,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6B9D)),
+                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.brandPink),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -671,7 +671,7 @@ class _WritingScreenState extends State<WritingScreen> {
                   child: Text(
                     _generatingTip,
                     key: ValueKey(_generatingTip),
-                    style: const TextStyle(fontSize: 13, color: Color(0xFF666666)),
+                    style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
                   ),
                 ),
               ],
@@ -808,7 +808,7 @@ class _WritingScreenState extends State<WritingScreen> {
                             results[selectedIndex].content,
                             style: const TextStyle(
                               fontSize: 15,
-                              color: Color(0xFFFF3B3B),
+                              color: AppColors.brandRed,
                               height: 1.8,
                             ),
                           ),
@@ -824,7 +824,7 @@ class _WritingScreenState extends State<WritingScreen> {
                 margin: const EdgeInsets.symmetric(horizontal: 16),
                 height: 2,
                 decoration: const BoxDecoration(
-                  color: Color(0xFFFF3B3B),
+                  color: AppColors.brandRed,
                 ),
               ),
             ],
@@ -838,14 +838,14 @@ class _WritingScreenState extends State<WritingScreen> {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(26),
             gradient: const LinearGradient(
-              colors: [Colors.white, Color(0xFFFF3B3B)],
+              colors: [Colors.white, AppColors.brandRed],
               stops: [0.5, 0.5],
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
             ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFFFF3B3B).withOpacity(0.3),
+                color: AppColors.brandRed.withOpacity(0.3),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -858,7 +858,7 @@ class _WritingScreenState extends State<WritingScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     // 取消：放弃续写结果，直接关闭（不保存不撤回），清除续写状态
-                    _ActionBtn(label: '取消', color: const Color(0xFFFF3B3B), onTap: () {
+                    _ActionBtn(label: '取消', color: AppColors.brandRed, onTap: () {
                       provider.setContinuationIdle();
                       setState(() {
                         _showContinuationOptions = false;
@@ -866,15 +866,15 @@ class _WritingScreenState extends State<WritingScreen> {
                       });
                     }),
                     // 撤回：恢复续写前的原文内容，然后关闭
-                    _ActionBtn(label: '撤回', color: const Color(0xFFFF3B3B), onTap: () {
+                    _ActionBtn(label: '撤回', color: AppColors.brandRed, onTap: () {
                       provider.undoContinuation();
                       setState(() {
                         _showContinuationOptions = false;
                         _aiWritingMode = '';
                       });
                     }),
-                    _ActionBtn(label: '修改', color: const Color(0xFFFF3B3B), onTap: () {}),
-                    _ActionBtn(label: '保存', color: const Color(0xFFFF3B3B), onTap: () {
+                    _ActionBtn(label: '修改', color: AppColors.brandRed, onTap: () {}),
+                    _ActionBtn(label: '保存', color: AppColors.brandRed, onTap: () {
                       // 直接从 results 计算新内容，避免依赖 applyContinuationResult 的状态同步
                       if (selectedIndex >= 0 && selectedIndex < results.length) {
                         final result = results[selectedIndex];
@@ -960,7 +960,7 @@ class _WritingScreenState extends State<WritingScreen> {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: const Color(0xFFFFF0F7),
+              color: AppColors.warmPinkBg,
               borderRadius: BorderRadius.circular(16),
             ),
             child: const Center(child: Text('🐋', style: TextStyle(fontSize: 18))),
@@ -968,7 +968,7 @@ class _WritingScreenState extends State<WritingScreen> {
           const SizedBox(width: 8),
           Text(
             title,
-            style: const TextStyle(fontSize: 14, color: Color(0xFF333333), fontWeight: FontWeight.w600),
+            style: const TextStyle(fontSize: 14, color: AppColors.textPrimary, fontWeight: FontWeight.w600),
           ),
           const Spacer(),
           // AI写作模式隐藏换一批按钮
@@ -979,14 +979,14 @@ class _WritingScreenState extends State<WritingScreen> {
                 width: 32,
                 height: 32,
                 decoration: const BoxDecoration(
-                  color: Color(0xFFFF6B9D),
+                  color: AppColors.brandPink,
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.refresh, color: Colors.white, size: 18),
               ),
             ),
             const SizedBox(width: 8),
-            const Text('换一批', style: TextStyle(fontSize: 13, color: Color(0xFF333333))),
+            const Text('换一批', style: TextStyle(fontSize: 13, color: AppColors.textPrimary)),
           ],
           const SizedBox(width: 16),
           ElevatedButton(
@@ -1003,7 +1003,7 @@ class _WritingScreenState extends State<WritingScreen> {
               });
             } : null,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF3B3B),
+              backgroundColor: AppColors.brandRed,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -1026,9 +1026,9 @@ class _WritingScreenState extends State<WritingScreen> {
         margin: const EdgeInsets.symmetric(horizontal: 16),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: const Color(0xFFFFF0F0),
+          color: AppColors.warmPinkBg,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFFF6B9D).withOpacity(0.3)),
+          border: Border.all(color: AppColors.brandPink.withOpacity(0.3)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1044,7 +1044,7 @@ class _WritingScreenState extends State<WritingScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFF6B9D),
+                      color: AppColors.brandPink,
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: const Row(
@@ -1064,7 +1064,7 @@ class _WritingScreenState extends State<WritingScreen> {
               child: SingleChildScrollView(
                 child: Text(
                   content,
-                  style: const TextStyle(fontSize: 14, color: Color(0xFFFF3B3B), height: 1.6),
+                  style: const TextStyle(fontSize: 14, color: AppColors.brandRed, height: 1.6),
                 ),
               ),
             ),
@@ -1084,12 +1084,12 @@ class _WritingScreenState extends State<WritingScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? const Color(0xFFFF3B3B) : const Color(0xFFE0E0E0),
+            color: isSelected ? AppColors.brandRed : AppColors.borderLight,
             width: isSelected ? 2 : 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: (isSelected ? const Color(0xFFFF3B3B) : Colors.black).withOpacity(0.06),
+              color: (isSelected ? AppColors.brandRed : Colors.black).withOpacity(0.06),
               blurRadius: isSelected ? 10 : 6,
               offset: const Offset(0, 2),
             ),
@@ -1109,7 +1109,7 @@ class _WritingScreenState extends State<WritingScreen> {
                     width: isSelected ? 24 : 0,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFF3B3B),
+                      color: AppColors.brandRed,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -1120,7 +1120,7 @@ class _WritingScreenState extends State<WritingScreen> {
                     duration: const Duration(milliseconds: 200),
                     child: const Icon(
                       Icons.check_circle,
-                      color: Color(0xFFFF3B3B),
+                      color: AppColors.brandRed,
                       size: 16,
                     ),
                   ),
@@ -1129,7 +1129,7 @@ class _WritingScreenState extends State<WritingScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFF6B9D),
+                        color: AppColors.brandPink,
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: const Text('New', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
@@ -1142,7 +1142,7 @@ class _WritingScreenState extends State<WritingScreen> {
               padding: const EdgeInsets.all(12),
               child: Text(
                 content,
-                style: const TextStyle(fontSize: 14, color: Color(0xFFFF3B3B), height: 1.6),
+                style: const TextStyle(fontSize: 14, color: AppColors.brandRed, height: 1.6),
                 maxLines: 7,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -1170,7 +1170,7 @@ class _WritingScreenState extends State<WritingScreen> {
           alignment: Alignment.center,
           decoration: isAccent
               ? const BoxDecoration(
-                  color: Color(0xFFFF3B3B),
+                  color: AppColors.brandRed,
                   borderRadius: BorderRadius.only(topRight: Radius.circular(26), bottomRight: Radius.circular(26)),
                 )
               : null,
@@ -1192,12 +1192,12 @@ class _WritingScreenState extends State<WritingScreen> {
           SizedBox(height: 16),
           Text(
             '功能开发中',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Color(0xFF888888)),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.textFaded),
           ),
           SizedBox(height: 8),
           Text(
             '一行续写模式即将上线',
-            style: TextStyle(fontSize: 14, color: Color(0xFFAAAAAA)),
+            style: TextStyle(fontSize: 14, color: AppColors.textFaded),
           ),
         ],
       ),
@@ -1213,12 +1213,12 @@ class _WritingScreenState extends State<WritingScreen> {
           SizedBox(height: 16),
           Text(
             '功能开发中',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Color(0xFF888888)),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.textFaded),
           ),
           SizedBox(height: 8),
           Text(
             '创造世界模式即将上线',
-            style: TextStyle(fontSize: 14, color: Color(0xFFAAAAAA)),
+            style: TextStyle(fontSize: 14, color: AppColors.textFaded),
           ),
         ],
       ),
@@ -1302,7 +1302,7 @@ class _GeneratingIndicatorState extends State<_GeneratingIndicator>
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: const Color(0xFFFF3B3B)
+                            color: AppColors.brandRed
                                 .withOpacity(0.3 * _pulseAnimation.value),
                             width: 3,
                           ),
@@ -1319,9 +1319,9 @@ class _GeneratingIndicatorState extends State<_GeneratingIndicator>
                           shape: BoxShape.circle,
                           gradient: SweepGradient(
                             colors: [
-                              const Color(0xFFFF6B9D),
-                              const Color(0xFFFF3B3B).withOpacity(0.2),
-                              const Color(0xFFFF6B9D),
+                              AppColors.brandPink,
+                              AppColors.brandRed.withOpacity(0.2),
+                              AppColors.brandPink,
                             ],
                           ),
                         ),
@@ -1343,7 +1343,7 @@ class _GeneratingIndicatorState extends State<_GeneratingIndicator>
               key: ValueKey(widget.tip),
               style: const TextStyle(
                 fontSize: 13,
-                color: Color(0xFF888888),
+                color: AppColors.textFaded,
               ),
             ),
           ),
@@ -1368,14 +1368,14 @@ class _DirectionToggleBtn extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: const [
-            Icon(Icons.tune, size: 16, color: Color(0xFF999999)),
+            Icon(Icons.tune, size: 16, color: AppColors.textHint),
             SizedBox(width: 6),
             Text(
               '选择续写方向',
-              style: TextStyle(fontSize: 13, color: Color(0xFF999999)),
+              style: TextStyle(fontSize: 13, color: AppColors.textHint),
             ),
             SizedBox(width: 4),
-            Icon(Icons.arrow_drop_down, size: 18, color: Color(0xFF999999)),
+            Icon(Icons.arrow_drop_down, size: 18, color: AppColors.textHint),
           ],
         ),
       ),

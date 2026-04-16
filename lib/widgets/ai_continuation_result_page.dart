@@ -29,7 +29,7 @@ class _AiContinuationResultPageState extends State<AiContinuationResultPage> {
             Align(
               alignment: Alignment.topRight,
               child: IconButton(
-                icon: const Icon(Icons.close, color: Color(0xFFFF6B9D)),
+                icon: const Icon(Icons.close, color: AppColors.brandPink),
                 onPressed: () => Navigator.of(context).pop(),
               ),
             ),
@@ -89,17 +89,17 @@ class _AiContinuationResultPageState extends State<AiContinuationResultPage> {
                                   Container(
                                     padding: const EdgeInsets.all(12),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFFFFF0F0),
+                                      color: AppColors.warmPinkBg,
                                       borderRadius: BorderRadius.circular(8),
                                       border: Border.all(
-                                        color: const Color(0xFFFF6B9D).withOpacity(0.3),
+                                        color: AppColors.brandPink.withOpacity(0.3),
                                       ),
                                     ),
                                     child: Text(
                                       generatedText,
                                       style: const TextStyle(
                                         fontSize: 15,
-                                        color: Color(0xFFFF3B3B),
+                                        color: AppColors.brandRed,
                                         height: 1.8,
                                         fontWeight: FontWeight.w500,
                                       ),
@@ -119,7 +119,7 @@ class _AiContinuationResultPageState extends State<AiContinuationResultPage> {
                     margin: const EdgeInsets.symmetric(horizontal: 16),
                     height: 2,
                     decoration: const BoxDecoration(
-                      color: Color(0xFFFF3B3B),
+                      color: AppColors.brandRed,
                     ),
                   ),
                 ],
@@ -143,7 +143,7 @@ class _AiContinuationResultPageState extends State<AiContinuationResultPage> {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('已保存~'),
-                          backgroundColor: Color(0xFFFF6B9D),
+                          backgroundColor: AppColors.brandPink,
                         ),
                       );
                     },
@@ -181,7 +181,7 @@ class _AiContinuationResultPageState extends State<AiContinuationResultPage> {
                           return const Center(
                             child: Text(
                               '正在生成...',
-                              style: TextStyle(color: Color(0xFFFF6B9D)),
+                              style: TextStyle(color: AppColors.brandPink),
                             ),
                           );
                         }

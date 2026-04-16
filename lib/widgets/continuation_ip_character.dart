@@ -46,7 +46,7 @@ class _IpCharacterPainter extends CustomPainter {
     final paint = Paint()..style = PaintingStyle.fill;
     
     // 鲸鱼身体
-    paint.color = const Color(0xFFFF6B9D);
+    paint.color = AppColors.brandPink;
     final bodyPath = Path();
     bodyPath.addOval(Rect.fromCenter(
       center: center.translate(0, 10),
@@ -56,7 +56,7 @@ class _IpCharacterPainter extends CustomPainter {
     canvas.drawPath(bodyPath, paint);
     
     // 鲸鱼尾巴
-    paint.color = const Color(0xFFFF6B9D);
+    paint.color = AppColors.brandPink;
     final tailPath = Path();
     tailPath.moveTo(center.dx - size.width * 0.25, center.dy + 5);
     tailPath.quadraticBezierTo(
@@ -79,12 +79,12 @@ class _IpCharacterPainter extends CustomPainter {
     canvas.drawCircle(center.translate(10, 0), 8, paint);
     
     // 鲸鱼瞳孔
-    paint.color = const Color(0xFF333333);
+    paint.color = AppColors.textPrimary;
     canvas.drawCircle(center.translate(-8, 2), 4, paint);
     canvas.drawCircle(center.translate(12, 2), 4, paint);
     
     // 鲸鱼腮红
-    paint.color = const Color(0xFFFFB6C1).withOpacity(0.6);
+    paint.color = const AppColors.brandPink.withOpacity(0.6);
     canvas.drawOval(Rect.fromCenter(
       center: center.translate(-22, 10),
       width: 12,
@@ -97,7 +97,7 @@ class _IpCharacterPainter extends CustomPainter {
     ), paint);
     
     // 鲸鱼嘴
-    paint.color = const Color(0xFFFF3B3B);
+    paint.color = AppColors.brandRed;
     final mouthPath = Path();
     mouthPath.moveTo(center.dx - 6, center.dy + 12);
     mouthPath.quadraticBezierTo(center.dx, center.dy + 18, center.dx + 6, center.dy + 12);

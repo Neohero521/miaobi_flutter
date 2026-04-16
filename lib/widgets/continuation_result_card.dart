@@ -27,12 +27,12 @@ class ContinuationResultCard extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? const Color(0xFFFF3B3B) : const Color(0xFFE0E0E0),
+            color: isSelected ? AppColors.brandRed : AppColors.borderLight,
             width: isSelected ? 2 : 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: (isSelected ? const Color(0xFFFF3B3B) : Colors.black).withOpacity(0.06),
+              color: (isSelected ? AppColors.brandRed : Colors.black).withOpacity(0.06),
               blurRadius: isSelected ? 10 : 6,
               offset: const Offset(0, 2),
             ),
@@ -49,7 +49,7 @@ class ContinuationResultCard extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFF6B9D),
+                    color: AppColors.brandPink,
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: const Text(
@@ -71,7 +71,7 @@ class ContinuationResultCard extends StatelessWidget {
                 content,
                 style: const TextStyle(
                   fontSize: 14,
-                  color: Color(0xFFFF3B3B),
+                  color: AppColors.brandRed,
                   height: 1.6,
                 ),
                 maxLines: 10,

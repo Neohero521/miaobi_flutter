@@ -24,7 +24,7 @@ class ContinuationRefreshZone extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: const Color(0xFFFFF0F7),
+              color: AppColors.warmPinkBg,
               borderRadius: BorderRadius.circular(18),
             ),
             child: Center(
@@ -41,7 +41,7 @@ class ContinuationRefreshZone extends StatelessWidget {
             'AI续写推荐',
             style: TextStyle(
               fontSize: 14,
-              color: Color(0xFF333333),
+              color: AppColors.textPrimary,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -54,7 +54,7 @@ class ContinuationRefreshZone extends StatelessWidget {
               width: 32,
               height: 32,
               decoration: const BoxDecoration(
-                color: Color(0xFFFF6B9D),
+                color: AppColors.brandPink,
                 shape: BoxShape.circle,
               ),
               child: const Icon(
@@ -73,7 +73,7 @@ class ContinuationRefreshZone extends StatelessWidget {
               '换一批',
               style: TextStyle(
                 fontSize: 13,
-                color: Color(0xFF333333),
+                color: AppColors.textPrimary,
               ),
             ),
           ),
@@ -83,7 +83,7 @@ class ContinuationRefreshZone extends StatelessWidget {
           ElevatedButton(
             onPressed: onUse,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF3B3B),
+              backgroundColor: AppColors.brandRed,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               shape: RoundedRectangleBorder(

@@ -168,7 +168,7 @@ class _CharacterEditorState extends State<_CharacterEditor> {
               child: ElevatedButton(
                 onPressed: _save,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF3B3B),
+                  backgroundColor: AppColors.brandRed,
                   foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 48),
                   shape: RoundedRectangleBorder(
