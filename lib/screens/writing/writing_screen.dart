@@ -25,7 +25,6 @@ class WritingScreen extends StatefulWidget {
 class _WritingScreenState extends State<WritingScreen> {
   final TextEditingController _contentController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
-  final ScrollController _editorScrollController = ScrollController(); // 编辑器滚动控制器
   bool _showDirectionSelector = false;
   int _currentTabIndex = 0; // 0=创作, 1=一行续写, 2=创造世界
   List<String> _continuationOptions = []; // 续写多选项
@@ -83,7 +82,6 @@ class _WritingScreenState extends State<WritingScreen> {
     _contentController.removeListener(_onContentChanged);
     _contentController.dispose();
     _focusNode.dispose();
-    _editorScrollController.dispose();
     super.dispose();
   }
 
@@ -201,37 +199,6 @@ class _WritingScreenState extends State<WritingScreen> {
         child: const HistoryBottomSheet(),
       ),
     );
-  }
-  
-  /// 更新内容同时保持滚动位置
-  void _updateContentPreservingScroll(String newContent) {
-    if (!mounted) return;
-    // 保存当前滚动位置和内容长度
-    final oldScrollPosition = _editorScrollController.hasClients 
-        ? _editorScrollController.position.pixels 
-        : 0.0;
-    final oldContentLength = _contentController.text.length;
-    
-    // 更新内容
-    _contentController.text = newContent;
-    
-    // 恢复滚动位置（在下一帧）
-    if (_editorScrollController.hasClients) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_editorScrollController.hasClients) {
-          // 计算新的滚动位置：保持相对位置
-          final newContentLength = newContent.length;
-          final ratio = oldContentLength > 0 
-              ? oldScrollPosition / oldContentLength 
-              : 0.0;
-          final newScrollPosition = ratio * newContentLength;
-          final maxScroll = _editorScrollController.position.maxScrollExtent;
-          _editorScrollController.jumpTo(
-            newScrollPosition.clamp(0.0, maxScroll),
-          );
-        }
-      });
-    }
   }
 
   /// AI写作处理（扩写/缩写/改写/定向续写）
@@ -749,27 +716,25 @@ class _WritingScreenState extends State<WritingScreen> {
                 ),
               ],
             ),
-            child: SingleChildScrollView(
-              controller: _editorScrollController,
-              child: TextField(
-                controller: _contentController,
-                focusNode: _focusNode,
-                maxLines: null,
-                textAlignVertical: TextAlignVertical.top,
-                style: const TextStyle(
+            child: TextField(
+              controller: _contentController,
+              focusNode: _focusNode,
+              maxLines: null,
+              minLines: 10,  // 设置最小行数，让内容超出时可以滚动
+              textAlignVertical: TextAlignVertical.top,
+              style: const TextStyle(
+                fontSize: 16,
+                color: AppColors.ink,
+                height: 1.8,
+              ),
+              decoration: InputDecoration(
+                hintText: '在此处开始写作...',
+                hintStyle: TextStyle(
+                  color: AppColors.hint.withOpacity(0.45),
                   fontSize: 16,
-                  color: AppColors.ink,
-                  height: 1.8,
                 ),
-                decoration: InputDecoration(
-                  hintText: '在此处开始写作...',
-                  hintStyle: TextStyle(
-                    color: AppColors.hint.withOpacity(0.45),
-                    fontSize: 16,
-                  ),
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.zero,
-                ),
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
               ),
             ),
           ),
@@ -928,12 +893,12 @@ class _WritingScreenState extends State<WritingScreen> {
                     }),
                     _ActionBtn(label: '修改', color: AppColors.brandRed, onTap: () {}),
                     _ActionBtn(label: '保存', color: AppColors.brandRed, onTap: () {
-                      // 直接从 results 计算新内容，避免依赖 applyContinuationResult 的状态同步
+                      // 直接从 results 计算新内容
                       if (selectedIndex >= 0 && selectedIndex < results.length) {
                         final result = results[selectedIndex];
                         final baseContent = provider.state.originalContent ?? provider.state.content;
                         final newContent = baseContent + result.content;
-                        _updateContentPreservingScroll(newContent);
+                        _contentController.text = newContent;
                         provider.setContent(newContent);
                       }
                       provider.setContinuationIdle();
@@ -1047,7 +1012,7 @@ class _WritingScreenState extends State<WritingScreen> {
               final result = results[selectedIndex];
               final baseContent = provider.state.originalContent ?? provider.state.content;
               final newContent = baseContent + result.content;
-              _updateContentPreservingScroll(newContent);
+              _contentController.text = newContent;
               provider.setContent(newContent);
               provider.setContinuationIdle();
               setState(() {
