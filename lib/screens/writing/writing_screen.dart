@@ -84,6 +84,26 @@ class _WritingScreenState extends State<WritingScreen> {
     );
   }
 
+  void _showHistorySheet(BuildContext context) {
+    final provider = context.read<WritingProvider>();
+    if (provider.state.historyVersions.isEmpty) {
+      _showSnackBar('暂无历史版本记录~');
+      return;
+    }
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SizedBox(
+        height: MediaQuery.of(context).size.height * 0.6,
+        child: const HistoryBottomSheet(),
+      ),
+    );
+  }
+
   /// AI写作处理（扩写/缩写/改写/定向续写）
   void _onAiWriting(String type) async {
     // 获取选中的文本
@@ -479,6 +499,13 @@ class _WritingScreenState extends State<WritingScreen> {
               );
             },
           ),
+          // 历史版本按钮
+          IconButton(
+            icon: const Icon(Icons.history, color: AppColors.ink),
+            onPressed: () {
+              _showHistorySheet(context);
+            },
+          ),
         ],
       ),
     );
@@ -522,11 +549,15 @@ class _WritingScreenState extends State<WritingScreen> {
   Widget _buildNormalEditorLayout() {
     return Column(
       children: [
-        // 续写方向选择
+        // 续写方向选择（可展开/收起）
         if (_showDirectionSelector) ...[
           const DirectionSelector(),
           const Divider(height: 1),
         ],
+        if (!_showDirectionSelector)
+          _DirectionToggleBtn(
+            onTap: () => setState(() => _showDirectionSelector = true),
+          ),
         
         // 续写建议
         const ContinuationSuggestions(),
@@ -574,27 +605,37 @@ class _WritingScreenState extends State<WritingScreen> {
         
         // 字数统计
         Consumer<WritingProvider>(
-          builder: (context, provider, _) => Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                Text(
-                  '${provider.state.wordCount}字',
-                  style: const TextStyle(color: AppColors.faded, fontSize: 12),
-                ),
-                const Spacer(),
-                Text(
-                  '👍 ${provider.state.likedCount}',
-                  style: const TextStyle(fontSize: 12),
-                ),
-                const SizedBox(width: 16),
-                Text(
-                  '👎 ${provider.state.dislikedCount}',
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ],
-            ),
-          ),
+          builder: (context, provider, _) {
+            final wordCount = provider.state.wordCount;
+            // 按约400字/分钟估算阅读时间
+            final readingMinutes = (wordCount / 400).ceil();
+            final readingTimeDesc = wordCount == 0
+                ? '0字'
+                : readingMinutes < 1
+                    ? '$wordCount字 (<1分钟阅读)'
+                    : '$wordCount字 ($readingMinutes分钟阅读)';
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Text(
+                    readingTimeDesc,
+                    style: const TextStyle(color: AppColors.faded, fontSize: 12),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '👍 ${provider.state.likedCount}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  const SizedBox(width: 16),
+                  Text(
+                    '👎 ${provider.state.dislikedCount}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
       ],
     );
@@ -1064,6 +1105,36 @@ class _WritingScreenState extends State<WritingScreen> {
         onShrink: () => _onAiWriting('shrink'),
         onRewrite: () => _onAiWriting('rewrite'),
         onDirectedContinuation: () => _onAiWriting('directed'),
+      ),
+    );
+  }
+}
+
+/// 续写方向选择器展开按钮（默认收起，用户点击后展开）
+class _DirectionToggleBtn extends StatelessWidget {
+  final VoidCallback onTap;
+  const _DirectionToggleBtn({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            Icon(Icons.tune, size: 16, color: Color(0xFF999999)),
+            SizedBox(width: 6),
+            Text(
+              '选择续写方向',
+              style: TextStyle(fontSize: 13, color: Color(0xFF999999)),
+            ),
+            SizedBox(width: 4),
+            Icon(Icons.arrow_drop_down, size: 18, color: Color(0xFF999999)),
+          ],
+        ),
       ),
     );
   }
