@@ -25,6 +25,7 @@ class WritingScreen extends StatefulWidget {
 class _WritingScreenState extends State<WritingScreen> {
   final TextEditingController _contentController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
+  final ScrollController _editorScrollController = ScrollController(); // 编辑器滚动控制器
   bool _showDirectionSelector = false;
   int _currentTabIndex = 0; // 0=创作, 1=一行续写, 2=创造世界
   List<String> _continuationOptions = []; // 续写多选项
@@ -82,6 +83,7 @@ class _WritingScreenState extends State<WritingScreen> {
     _contentController.removeListener(_onContentChanged);
     _contentController.dispose();
     _focusNode.dispose();
+    _editorScrollController.dispose();
     super.dispose();
   }
 
@@ -716,25 +718,27 @@ class _WritingScreenState extends State<WritingScreen> {
                 ),
               ],
             ),
-            child: TextField(
-              controller: _contentController,
-              focusNode: _focusNode,
-              maxLines: null,
-              minLines: 10,  // 设置最小行数，让内容超出时可以滚动
-              textAlignVertical: TextAlignVertical.top,
-              style: const TextStyle(
-                fontSize: 16,
-                color: AppColors.ink,
-                height: 1.8,
-              ),
-              decoration: InputDecoration(
-                hintText: '在此处开始写作...',
-                hintStyle: TextStyle(
-                  color: AppColors.hint.withOpacity(0.45),
+            child: SingleChildScrollView(
+              controller: _editorScrollController,
+              child: TextField(
+                controller: _contentController,
+                focusNode: _focusNode,
+                maxLines: null,
+                textAlignVertical: TextAlignVertical.top,
+                style: const TextStyle(
                   fontSize: 16,
+                  color: AppColors.ink,
+                  height: 1.8,
                 ),
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.zero,
+                decoration: InputDecoration(
+                  hintText: '在此处开始写作...',
+                  hintStyle: TextStyle(
+                    color: AppColors.hint.withOpacity(0.45),
+                    fontSize: 16,
+                  ),
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                ),
               ),
             ),
           ),
@@ -902,6 +906,16 @@ class _WritingScreenState extends State<WritingScreen> {
                         _contentController.text = newContent;
                         _contentController.selection = TextSelection.collapsed(offset: newCursorPos);
                         provider.setContent(newContent);
+                        // 主动滚动到光标位置
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (_editorScrollController.hasClients) {
+                            _editorScrollController.animateTo(
+                              _editorScrollController.position.maxScrollExtent,
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeOut,
+                            );
+                          }
+                        });
                       }
                       provider.setContinuationIdle();
                       setState(() {
@@ -1018,6 +1032,16 @@ class _WritingScreenState extends State<WritingScreen> {
               _contentController.text = newContent;
               _contentController.selection = TextSelection.collapsed(offset: newCursorPos);
               provider.setContent(newContent);
+              // 主动滚动到光标位置
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (_editorScrollController.hasClients) {
+                  _editorScrollController.animateTo(
+                    _editorScrollController.position.maxScrollExtent,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOut,
+                  );
+                }
+              });
               provider.setContinuationIdle();
               setState(() {
                 _showContinuationOptions = false;
