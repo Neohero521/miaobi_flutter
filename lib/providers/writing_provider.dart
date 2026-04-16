@@ -430,7 +430,9 @@ class WritingProvider extends ChangeNotifier {
     _state = _state.copyWith(
       continuationStatus: ContinuationStatus.idle,
       continuationResults: const [],
+      currentResultIndex: 0,
       originalContent: null,
+      lastGeneratedContent: null,
     );
     notifyListeners();
   }

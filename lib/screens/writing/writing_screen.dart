@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -31,13 +32,11 @@ class _WritingScreenState extends State<WritingScreen> {
   bool _isGenerating = false; // 续写进行中
   String _aiWritingMode = ''; // '' | 'expand' | 'shrink' | 'rewrite' | 'directed'
 
-  static const String _browserUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+  // 内容变化防抖
+  Timer? _debounceTimer;
+  String _pendingContent = '';
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // removed duplicate _loadSavedContent() call — initState handles it via addPostFrameCallback
-  }
+  static const String _browserUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
   void initState() {
     super.initState();
@@ -57,12 +56,19 @@ class _WritingScreenState extends State<WritingScreen> {
   }
 
   void _onContentChanged() {
-    final provider = context.read<WritingProvider>();
-    provider.setContent(_contentController.text);
+    _pendingContent = _contentController.text;
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 800), () {
+      if (mounted) {
+        final provider = context.read<WritingProvider>();
+        provider.setContent(_pendingContent);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _contentController.removeListener(_onContentChanged);
     _contentController.dispose();
     _focusNode.dispose();
@@ -689,8 +695,9 @@ class _WritingScreenState extends State<WritingScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    // 取消：放弃续写结果，直接关闭（不保存不撤回）
+                    // 取消：放弃续写结果，直接关闭（不保存不撤回），清除续写状态
                     _ActionBtn(label: '取消', color: const Color(0xFFFF3B3B), onTap: () {
+                      provider.setContinuationIdle();
                       setState(() {
                         _showContinuationOptions = false;
                         _aiWritingMode = '';
@@ -714,6 +721,7 @@ class _WritingScreenState extends State<WritingScreen> {
                         _contentController.text = newContent;
                         provider.setContent(newContent);
                       }
+                      provider.setContinuationIdle();
                       setState(() {
                         _showContinuationOptions = false;
                         _aiWritingMode = '';
@@ -837,6 +845,7 @@ class _WritingScreenState extends State<WritingScreen> {
               final newContent = baseContent + result.content;
               _contentController.text = newContent;
               provider.setContent(newContent);
+              provider.setContinuationIdle();
               setState(() {
                 _showContinuationOptions = false;
                 _aiWritingMode = '';
