@@ -898,7 +898,9 @@ class _WritingScreenState extends State<WritingScreen> {
                         final result = results[selectedIndex];
                         final baseContent = provider.state.originalContent ?? provider.state.content;
                         final newContent = baseContent + result.content;
+                        final newCursorPos = newContent.length; // 光标移到末尾
                         _contentController.text = newContent;
+                        _contentController.selection = TextSelection.collapsed(offset: newCursorPos);
                         provider.setContent(newContent);
                       }
                       provider.setContinuationIdle();
@@ -1012,7 +1014,9 @@ class _WritingScreenState extends State<WritingScreen> {
               final result = results[selectedIndex];
               final baseContent = provider.state.originalContent ?? provider.state.content;
               final newContent = baseContent + result.content;
+              final newCursorPos = newContent.length; // 光标移到末尾
               _contentController.text = newContent;
+              _contentController.selection = TextSelection.collapsed(offset: newCursorPos);
               provider.setContent(newContent);
               provider.setContinuationIdle();
               setState(() {
