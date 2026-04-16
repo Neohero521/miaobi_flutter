@@ -116,6 +116,7 @@ class _WritingScreenState extends State<WritingScreen> {
     
     final provider = context.read<WritingProvider>();
     provider.setGenerating(true);
+    provider.startContinuation();
     setState(() => _isGenerating = true);
 
     try {
@@ -255,6 +256,7 @@ class _WritingScreenState extends State<WritingScreen> {
     
     final provider = context.read<WritingProvider>();
     provider.setGenerating(true);
+    provider.startContinuation();
     setState(() => _isGenerating = true);
 
     try {
