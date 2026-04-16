@@ -270,34 +270,40 @@ class _UndoButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: enabled ? Colors.black : Colors.grey.shade400,
-            width: 1,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.arrow_back_ios,
-              size: 12,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
               color: enabled ? Colors.black : Colors.grey.shade400,
+              width: 1,
             ),
-            const SizedBox(width: 2),
-            Text(
-              '上一步',
-              style: TextStyle(
-                fontSize: 12,
+          ),
+          alignment: Alignment.center,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.arrow_back_ios,
+                size: 12,
                 color: enabled ? Colors.black : Colors.grey.shade400,
               ),
-            ),
-          ],
+              const SizedBox(width: 2),
+              Text(
+                '上一步',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: enabled ? Colors.black : Colors.grey.shade400,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -314,34 +320,40 @@ class _RedoButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: enabled ? Colors.black : Colors.grey.shade400,
-            width: 1,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: enabled ? Colors.black : Colors.grey.shade400,
+              width: 1,
+            ),
           ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '下一步',
-              style: TextStyle(
-                fontSize: 12,
+          alignment: Alignment.center,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '下一步',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: enabled ? Colors.black : Colors.grey.shade400,
+                ),
+              ),
+              const SizedBox(width: 2),
+              Icon(
+                Icons.arrow_forward_ios,
+                size: 12,
                 color: enabled ? Colors.black : Colors.grey.shade400,
               ),
-            ),
-            const SizedBox(width: 2),
-            Icon(
-              Icons.arrow_forward_ios,
-              size: 12,
-              color: enabled ? Colors.black : Colors.grey.shade400,
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

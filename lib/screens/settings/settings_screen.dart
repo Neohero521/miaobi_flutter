@@ -315,6 +315,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.typewriterCream,
+      appBar: AppBar(
+        title: const Text(
+          '⚙️ 设置',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: AppColors.ink,
+          ),
+        ),
+        backgroundColor: AppColors.typewriterCream,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: AppColors.ink, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
+        centerTitle: true,
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

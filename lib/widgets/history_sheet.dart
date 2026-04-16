@@ -15,9 +15,20 @@ class HistoryBottomSheet extends StatelessWidget {
         return Container(
           padding: const EdgeInsets.all(16),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // 顶部手柄表示拉盘
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
               const Text('⏪ 后悔药 - 历史版本', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               const Text('点击任意版本可恢复到该时刻', style: TextStyle(fontSize: 12, color: Colors.grey)),
@@ -26,7 +37,16 @@ class HistoryBottomSheet extends StatelessWidget {
               if (history.isEmpty)
                 const Expanded(
                   child: Center(
-                    child: Text('暂无历史记录', style: TextStyle(color: Colors.grey)),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('📜', style: TextStyle(fontSize: 40)),
+                        SizedBox(height: 12),
+                        Text('暂无历史记录', style: TextStyle(fontSize: 16, color: Colors.grey, fontWeight: FontWeight.w500)),
+                        SizedBox(height: 4),
+                        Text('开始写作后会自动记录历史~', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                      ],
+                    ),
                   ),
                 )
               else

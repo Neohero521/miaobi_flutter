@@ -104,6 +104,7 @@ class WorldSettingBottomSheet extends StatelessWidget {
         icon = Icons.history_edu;
         color = Colors.purple;
         break;
+      case '其他':
       default:
         icon = Icons.public;
         color = Colors.grey;
@@ -133,14 +134,14 @@ class _WorldSettingEditorState extends State<_WorldSettingEditor> {
   late TextEditingController _contentController;
   String _selectedType = 'general';
 
-  final _types = ['地理', '势力', '规则', '历史', 'general'];
+  final _types = ['地理', '势力', '规则', '历史', '其他'];
 
   @override
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.setting?.title ?? '');
     _contentController = TextEditingController(text: widget.setting?.content ?? '');
-    _selectedType = widget.setting?.type ?? 'general';
+    _selectedType = widget.setting?.type == 'general' ? '其他' : (widget.setting?.type ?? '其他');
   }
 
   @override
@@ -173,7 +174,24 @@ class _WorldSettingEditorState extends State<_WorldSettingEditor> {
             const SizedBox(height: 12),
             TextField(controller: _contentController, decoration: const InputDecoration(labelText: '内容', border: OutlineInputBorder()), maxLines: 5),
             const SizedBox(height: 16),
-            SizedBox(width: double.infinity, child: ElevatedButton(onPressed: _save, child: Text(widget.setting == null ? '添加' : '保存'))),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _save,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF3B3B),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: Text(
+                  widget.setting == null ? '添加设定' : '保存修改',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
           ],
         ),
       ),

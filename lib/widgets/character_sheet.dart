@@ -35,7 +35,16 @@ class CharacterBottomSheet extends StatelessWidget {
                 const Center(
                   child: Padding(
                     padding: EdgeInsets.all(32),
-                    child: Text('暂无角色\n点击「添加」创建角色设定', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('👤', style: TextStyle(fontSize: 40)),
+                        SizedBox(height: 12),
+                        Text('暂无角色设定', style: TextStyle(fontSize: 16, color: Colors.grey, fontWeight: FontWeight.w500)),
+                        SizedBox(height: 4),
+                        Text('点击「添加」创建你的故事角色~', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                      ],
+                    ),
                   ),
                 )
               else
@@ -158,7 +167,18 @@ class _CharacterEditorState extends State<_CharacterEditor> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _save,
-                child: Text(widget.character == null ? '添加' : '保存'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF3B3B),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: Text(
+                  widget.character == null ? '添加角色' : '保存修改',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
               ),
             ),
           ],
