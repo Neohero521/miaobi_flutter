@@ -75,13 +75,63 @@ class _WritingScreenState extends State<WritingScreen> {
     super.dispose();
   }
 
-  void _showSnackBar(String message) {
+  void _showSnackBar(String message, {bool isError = false, bool isSuccess = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
-        backgroundColor: const Color(0xFFFF6B9D),
+        content: Row(
+          children: [
+            if (isSuccess) const Text('✅ ', style: TextStyle(fontSize: 16))
+            else if (isError) const Text('❌ ', style: TextStyle(fontSize: 16))
+            else const Text('💡 ', style: TextStyle(fontSize: 16)),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: isSuccess
+            ? const Color(0xFF4CAF50)
+            : isError
+                ? const Color(0xFFE53935)
+                : const Color(0xFFFF6B9D),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: Duration(seconds: isError ? 4 : 2),
       ),
     );
+  }
+
+  /// 将API错误映射为友好提示
+  String _mapApiError(dynamic error, int? statusCode) {
+    if (statusCode != null) {
+      switch (statusCode) {
+        case 400:
+          return '请求格式有误，请检查输入内容';
+        case 401:
+          return 'API密钥无效，请重新配置';
+        case 403:
+          return 'API访问被拒绝，请检查权限设置';
+        case 404:
+          return 'API地址不存在，请检查URL配置';
+        case 429:
+          return '请求过于频繁，请稍后再试';
+        case 500:
+          return '服务器内部错误，请稍后再试';
+        case 502:
+        case 503:
+          return '服务暂时不可用，请稍后再试';
+        default:
+          return '请求失败 ($statusCode)';
+      }
+    }
+    final msg = error.toString().toLowerCase();
+    if (msg.contains('timeout') || msg.contains('超时')) {
+      return '请求超时，请检查网络连接';
+    }
+    if (msg.contains('socketexception') || msg.contains('网络')) {
+      return '网络连接失败，请检查网络';
+    }
+    if (msg.contains('connection')) {
+      return '无法连接服务器，请检查网络';
+    }
+    return error.toString().replaceFirst('Exception: ', '');
   }
 
   void _showHistorySheet(BuildContext context) {
@@ -177,12 +227,8 @@ class _WritingScreenState extends State<WritingScreen> {
       );
 
       if (response.statusCode != 200) {
-        String errMsg = '请求失败 (${response.statusCode})';
-        try {
-          final errBody = json.decode(response.body);
-          errMsg = errBody['error']?['message'] ?? errBody['error']?['msg'] ?? response.body;
-        } catch (_) {}
-        throw Exception(errMsg);
+        final friendlyMsg = _mapApiError(response.body, response.statusCode);
+        throw Exception(friendlyMsg);
       }
 
       final data = json.decode(response.body) as Map<String, dynamic>;
@@ -210,7 +256,7 @@ class _WritingScreenState extends State<WritingScreen> {
       provider.setContinuationError(e.toString());
       setState(() => _isGenerating = false);
       provider.setGenerating(false);
-      _showSnackBar(e.toString().replaceFirst('Exception: ', ''));
+      _showSnackBar(_mapApiError(e, null), isError: true);
     }
   }
   
@@ -341,12 +387,8 @@ class _WritingScreenState extends State<WritingScreen> {
       );
 
       if (response.statusCode != 200) {
-        String errMsg = '请求失败 (${response.statusCode})';
-        try {
-          final errBody = json.decode(response.body);
-          errMsg = errBody['error']?['message'] ?? errBody['error']?['msg'] ?? response.body;
-        } catch (_) {}
-        throw Exception(errMsg);
+        final friendlyMsg = _mapApiError(response.body, response.statusCode);
+        throw Exception(friendlyMsg);
       }
 
       final data = json.decode(response.body) as Map<String, dynamic>;
@@ -447,7 +489,7 @@ class _WritingScreenState extends State<WritingScreen> {
     } catch (e) {
       setState(() => _isGenerating = false);
       provider.setGenerating(false);
-      _showSnackBar('续写失败: $e');
+      _showSnackBar('续写失败: ${_mapApiError(e, null)}', isError: true);
     }
   }
 
@@ -769,9 +811,7 @@ class _WritingScreenState extends State<WritingScreen> {
                         _showContinuationOptions = false;
                         _aiWritingMode = '';
                       });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('已保存~'), backgroundColor: Color(0xFFFF6B9D)),
-                      );
+                      _showSnackBar('已保存~', isSuccess: true);
                     }),
                   ],
                 ),
