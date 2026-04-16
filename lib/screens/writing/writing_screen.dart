@@ -689,15 +689,16 @@ class _WritingScreenState extends State<WritingScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
+                    // 取消：放弃续写结果，直接关闭（不保存不撤回）
                     _ActionBtn(label: '取消', color: const Color(0xFFFF3B3B), onTap: () {
-                      // 关闭续写结果界面，回到编辑状态
                       setState(() {
                         _showContinuationOptions = false;
                         _aiWritingMode = '';
                       });
                     }),
+                    // 撤回：恢复续写前的原文内容，然后关闭
                     _ActionBtn(label: '撤回', color: const Color(0xFFFF3B3B), onTap: () {
-                      // 关闭续写结果界面，回到编辑状态
+                      provider.undoContinuation();
                       setState(() {
                         _showContinuationOptions = false;
                         _aiWritingMode = '';

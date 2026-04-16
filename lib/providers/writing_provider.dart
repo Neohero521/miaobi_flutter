@@ -451,9 +451,13 @@ class WritingProvider extends ChangeNotifier {
   }
   
   void undoContinuation() {
-    if (_state.lastGeneratedContent != null) {
+    // 优先使用 originalContent 还原到续写前的原文
+    // 这样可以真正"撤回"已应用的续写结果
+    if (_state.originalContent != null) {
+      setContent(_state.originalContent!, saveToHistory: false);
+    } else if (_state.lastGeneratedContent != null) {
       setContent(_state.lastGeneratedContent!, saveToHistory: false);
-      setContinuationIdle();
     }
+    setContinuationIdle();
   }
 }
