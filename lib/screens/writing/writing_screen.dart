@@ -699,11 +699,8 @@ class _WritingScreenState extends State<WritingScreen> {
             ),
           ),
 
-        // 续写建议（固定高度容器，防止布局跳动）
-        SizedBox(
-          height: 200,
-          child: ContinuationSuggestions(),
-        ),
+        // 续写建议
+        const ContinuationSuggestions(),
 
         // 编辑区域
         Expanded(

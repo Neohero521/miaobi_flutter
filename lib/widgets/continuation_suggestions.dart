@@ -9,10 +9,7 @@ class ContinuationSuggestions extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<WritingProvider>(
       builder: (context, provider, _) {
-        if (provider.state.suggestions.isEmpty) {
-          return const SizedBox.shrink();
-        }
-        
+        // 始终返回固定高度容器，防止布局跳动
         return Container(
           height: 200,
           padding: const EdgeInsets.all(16),
@@ -28,20 +25,27 @@ class ContinuationSuggestions extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Expanded(
-                child: ListView.separated(
-                  itemCount: provider.state.suggestions.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    final suggestion = provider.state.suggestions[index];
-                    return _SuggestionCard(
-                      title: suggestion.direction,
-                      content: suggestion.content,
-                      onTap: () {
-                        provider.applySuggestion(index);
-                      },
-                    );
-                  },
-                ),
+                child: provider.state.suggestions.isEmpty
+                    ? const Center(
+                        child: Text(
+                          '暂无续写建议',
+                          style: TextStyle(color: Colors.grey, fontSize: 14),
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: provider.state.suggestions.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemBuilder: (context, index) {
+                          final suggestion = provider.state.suggestions[index];
+                          return _SuggestionCard(
+                            title: suggestion.direction,
+                            content: suggestion.content,
+                            onTap: () {
+                              provider.applySuggestion(index);
+                            },
+                          );
+                        },
+                      ),
               ),
             ],
           ),
