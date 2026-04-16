@@ -31,6 +31,15 @@ class _WritingScreenState extends State<WritingScreen> {
   bool _showContinuationOptions = false;
   bool _isGenerating = false; // 续写进行中
   String _aiWritingMode = ''; // '' | 'expand' | 'shrink' | 'rewrite' | 'directed'
+  String _generatingTip = ''; // 生成中的提示文字
+
+  static const List<String> _generatingTips = [
+    '🐋 正在思考故事走向...',
+    '✨ 正在构建情节发展...',
+    '📖 正在续写精彩内容...',
+    '🎭 正在塑造人物命运...',
+    '🌟 正在挖掘故事深度...',
+  ];
 
   // 内容变化防抖
   Timer? _debounceTimer;
@@ -96,6 +105,27 @@ class _WritingScreenState extends State<WritingScreen> {
         duration: Duration(seconds: isError ? 4 : 2),
       ),
     );
+  }
+
+  Timer? _generatingTipTimer;
+
+  void _startGeneratingTipRotation() {
+    _generatingTipTimer?.cancel();
+    int index = 0;
+    setState(() => _generatingTip = _generatingTips[0]);
+    _generatingTipTimer = Timer.periodic(const Duration(milliseconds: 2500), (timer) {
+      if (!mounted || !_isGenerating) {
+        timer.cancel();
+        return;
+      }
+      setState(() => _generatingTip = _generatingTips[index % _generatingTips.length]);
+      index++;
+    });
+  }
+
+  void _stopGeneratingTipRotation() {
+    _generatingTipTimer?.cancel();
+    _generatingTipTimer = null;
   }
 
   /// 将API错误映射为友好提示
@@ -188,6 +218,7 @@ class _WritingScreenState extends State<WritingScreen> {
     provider.setGenerating(true);
     provider.startContinuation();
     setState(() => _isGenerating = true);
+    _startGeneratingTipRotation();
 
     try {
       // 构建AI写作的prompt
@@ -245,16 +276,22 @@ class _WritingScreenState extends State<WritingScreen> {
       ];
       
       provider.setContinuationResults(results);
+      _stopGeneratingTipRotation();
       setState(() {
         _showContinuationOptions = true;
         _isGenerating = false;
+        _generatingTip = '';
         _aiWritingMode = type; // 标记为AI写作模式
       });
       provider.setGenerating(false);
 
     } catch (e) {
       provider.setContinuationError(e.toString());
-      setState(() => _isGenerating = false);
+      _stopGeneratingTipRotation();
+      setState(() {
+        _isGenerating = false;
+        _generatingTip = '';
+      });
       provider.setGenerating(false);
       _showSnackBar(_mapApiError(e, null), isError: true);
     }
@@ -324,6 +361,7 @@ class _WritingScreenState extends State<WritingScreen> {
     provider.setGenerating(true);
     provider.startContinuation();
     setState(() => _isGenerating = true);
+    _startGeneratingTipRotation();
 
     try {
       // 构建续写长度对应的字数范围
@@ -479,15 +517,21 @@ class _WritingScreenState extends State<WritingScreen> {
       provider.setContinuationResults(resultItems);
       provider.setCurrentResultIndex(0);
 
+      _stopGeneratingTipRotation();
       // 显示续写结果模式
       setState(() {
         _showContinuationOptions = true;
         _isGenerating = false;
+        _generatingTip = '';
       });
       provider.setGenerating(false);
 
     } catch (e) {
-      setState(() => _isGenerating = false);
+      _stopGeneratingTipRotation();
+      setState(() {
+        _isGenerating = false;
+        _generatingTip = '';
+      });
       provider.setGenerating(false);
       _showSnackBar('续写失败: ${_mapApiError(e, null)}', isError: true);
     }
@@ -600,7 +644,40 @@ class _WritingScreenState extends State<WritingScreen> {
           _DirectionToggleBtn(
             onTap: () => setState(() => _showDirectionSelector = true),
           ),
-        
+
+        // 生成中提示
+        if (_isGenerating && _generatingTip.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF0F7),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFFF6B9D).withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6B9D)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  child: Text(
+                    _generatingTip,
+                    key: ValueKey(_generatingTip),
+                    style: const TextStyle(fontSize: 13, color: Color(0xFF666666)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
         // 续写建议
         const ContinuationSuggestions(),
         
@@ -818,16 +895,7 @@ class _WritingScreenState extends State<WritingScreen> {
               ),
               Expanded(
                 child: _isGenerating
-                    ? const Center(
-                        child: SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF3B3B)),
-                          ),
-                        ),
-                      )
+                    ? _GeneratingIndicator(tip: _generatingTip)
                     : _ActionBtn(
                         label: _aiWritingMode.isNotEmpty ? '重新生成' : 'AI续写',
                         color: Colors.white,
@@ -1012,7 +1080,6 @@ class _WritingScreenState extends State<WritingScreen> {
       child: Container(
         width: 260,
         margin: const EdgeInsets.symmetric(horizontal: 8),
-        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
@@ -1031,24 +1098,52 @@ class _WritingScreenState extends State<WritingScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (isNew)
-              Align(
-                alignment: Alignment.topRight,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFF6B9D),
-                    borderRadius: BorderRadius.circular(6),
+            // 顶部栏：选中指示 + New标签
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+              child: Row(
+                children: [
+                  // 选中状态指示条
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: isSelected ? 24 : 0,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF3B3B),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
-                  child: const Text('New', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                ),
+                  if (isSelected) const SizedBox(width: 6),
+                  // 选中图标
+                  AnimatedOpacity(
+                    opacity: isSelected ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: const Icon(
+                      Icons.check_circle,
+                      color: Color(0xFFFF3B3B),
+                      size: 16,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (isNew)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF6B9D),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text('New', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ),
+                ],
               ),
-            if (isNew) const SizedBox(height: 8),
-            Expanded(
+            ),
+            // 内容区域
+            Padding(
+              padding: const EdgeInsets.all(12),
               child: Text(
                 content,
                 style: const TextStyle(fontSize: 14, color: Color(0xFFFF3B3B), height: 1.6),
-                maxLines: 8,
+                maxLines: 7,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -1145,6 +1240,114 @@ class _WritingScreenState extends State<WritingScreen> {
         onShrink: () => _onAiWriting('shrink'),
         onRewrite: () => _onAiWriting('rewrite'),
         onDirectedContinuation: () => _onAiWriting('directed'),
+      ),
+    );
+  }
+}
+
+/// 生成中的动态提示指示器
+class _GeneratingIndicator extends StatefulWidget {
+  final String tip;
+  const _GeneratingIndicator({required this.tip});
+
+  @override
+  State<_GeneratingIndicator> createState() => _GeneratingIndicatorState();
+}
+
+class _GeneratingIndicatorState extends State<_GeneratingIndicator>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.6, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 动态波浪圆圈
+          SizedBox(
+            width: 48,
+            height: 48,
+            child: AnimatedBuilder(
+              animation: _pulseAnimation,
+              builder: (context, child) {
+                return Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // 外圈脉冲
+                    Transform.scale(
+                      scale: _pulseAnimation.value,
+                      child: Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: const Color(0xFFFF3B3B)
+                                .withOpacity(0.3 * _pulseAnimation.value),
+                            width: 3,
+                          ),
+                        ),
+                      ),
+                    ),
+                    // 内圈旋转
+                    RotationTransition(
+                      turns: _pulseController,
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: SweepGradient(
+                            colors: [
+                              const Color(0xFFFF6B9D),
+                              const Color(0xFFFF3B3B).withOpacity(0.2),
+                              const Color(0xFFFF6B9D),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    // 中心鲸鱼
+                    const Text('🐋', style: TextStyle(fontSize: 18)),
+                  ],
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
+          // 提示文字
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 400),
+            child: Text(
+              widget.tip,
+              key: ValueKey(widget.tip),
+              style: const TextStyle(
+                fontSize: 13,
+                color: Color(0xFF888888),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
